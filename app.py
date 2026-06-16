@@ -116,7 +116,7 @@ TICKERS_FIIS = [
     'HGLG11.SA', 'KNRI11.SA', 'VISC11.SA', 'MXRF11.SA', 'XPLG11.SA'
 ]
 
-# ------------------- FUNÇÕES DE BUSCA OPTIMIZADAS -------------------
+# ------------------- FUNÇÕES DE BUSCA OTIMIZADAS -------------------
 @st.cache_data(ttl=300)
 def get_macro_bcb(serie):
     try:
@@ -131,7 +131,6 @@ def get_macro_bcb(serie):
 def get_market_summary():
     try:
         df = yf.download(["^BVSP", "USDBRL=X"], period="2d", progress=False)
-        # Normalização de colunas para evitar MultiIndex
         if isinstance(df.columns, pd.MultiIndex):
             df.columns = ['_'.join(col).strip() for col in df.columns]
             
@@ -163,14 +162,14 @@ def get_batch_assets(tickers):
                 v_vol = df[col_vol].dropna().iloc[-1] if col_vol in df.columns else 0
                 var = ((close_hoje / close_ontem) - 1) * 100
                 data.append({
-                    'Ticker': ticker.replace('.SA', ''),
+                    'Ativo': ticker.replace('.SA', ''),
                     'Preço': round(close_hoje, 2),
                     'Variação (%)': round(var, 2),
                     'Volume Diário': int(v_vol)
                 })
         return pd.DataFrame(data)
     except Exception:
-        return pd.DataFrame(columns=['Ticker', 'Preço', 'Variação (%)', 'Volume Diário'])
+        return pd.DataFrame(columns=['Ativo', 'Preço', 'Variação (%)', 'Volume Diário'])
 
 @st.cache_data(ttl=3600)
 def get_historical_data(tickers, period="1y"):
@@ -200,7 +199,7 @@ def get_historical_macro(serie, name, days=365):
         return pd.DataFrame(columns=['Date', name])
 
 def calculate_quant_metrics(ticker, period="1y"):
-    """Usa .history() para garantir retorno unidimensional limpo e sem erros de tipo."""
+    """Usa .history() para garantir retorno limpo sem erros de MultiIndex."""
     try:
         objeto_ticker = yf.Ticker(ticker)
         df = objeto_ticker.history(period=period)
@@ -220,19 +219,19 @@ def calculate_quant_metrics(ticker, period="1y"):
     except Exception:
         return None
 
-# ------------------- DATA LOADING -------------------
+# ------------------- CARREGAMENTO DE DADOS -------------------
 summary = get_market_summary()
 selic = get_macro_bcb(432)
 cdi = get_macro_bcb(12)
 ipca = get_macro_bcb(4447)
 juro_real = (((1 + (selic/100)) / (1 + (ipca/100))) - 1) * 100
 
-# ------------------- SIDEBAR -------------------
+# ------------------- BARRA LATERAL (SIDEBAR) -------------------
 with st.sidebar:
     st.markdown("""
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-            <h2 style='margin:0; font-size: 1.4rem; color: #f0f6fc;'>QUANT TERMINAL</h2>
-            <div class="live-badge"><span class="pulse-dot"></span>LIVE</div>
+            <h2 style='margin:0; font-size: 1.4rem; color: #f0f6fc;'>TERMINAL QUANT</h2>
+            <div class="live-badge"><span class="pulse-dot"></span>AO VIVO</div>
         </div>
     """, unsafe_allow_html=True)
     
@@ -246,29 +245,28 @@ with st.sidebar:
     st.markdown("<div style='margin-bottom: 12px;'></div>", unsafe_allow_html=True)
     st.metric("IPCA (Acum. 12m)", f"{ipca:.2f}%")
     st.markdown("<div style='margin-bottom: 12px;'></div>", unsafe_allow_html=True)
-    st.metric("Juro Real Est. Lqd.", f"{juro_real:.2f}%")
+    st.metric("Juro Real Estimado", f"{juro_real:.2f}%")
     
     st.markdown("<hr style='border-color: #30363d; margin: 25px 0;'/>", unsafe_allow_html=True)
-    st.caption(f"Refreshed at: {datetime.now().strftime('%H:%M:%S')} BRT")
+    st.caption(f"Atualizado em: {datetime.now().strftime('%H:%M:%S')} BRT")
 
 # ------------------- CORPO PRINCIPAL -------------------
 st.markdown("""
     <div style="background: linear-gradient(90deg, #161b22 0%, #0d1117 100%); padding: 20px; border-radius: 8px; border: 1px solid #30363d; margin-bottom: 25px;">
-        <h1 style="margin: 0; color: #f0f6fc; font-size: 2rem;">Market Analytics & Quantitative Dashboard</h1>
-        <p style="margin: 5px 0 0 0; color: #8b949e; font-size: 0.95rem;">Análise estrutural de volatilidade, liquidez de ativos e tracking macroeconômico brasileiro.</p>
+        <h1 style="margin: 0; color: #f0f6fc; font-size: 2rem;">Analytics de Mercado & Dashboard Quantitativo</h1>
+        <p style="margin: 5px 0 0 0; color: #8b949e; font-size: 0.95rem;">Análise estrutural de volatilidade, liquidez de ativos e monitoramento macroeconômico brasileiro.</p>
     </div>
 """, unsafe_allow_html=True)
 
 tab1, tab2, tab3, tab4 = st.tabs([
     "📊 Visão Global & Macro", 
-    "🎯 Analytics Quantitativo", 
-    "📋 Screeners de Mercado", 
-    "⚙️ Fundamentos Estruturais"
+    "🎯 Análise Quantitativa", 
+    "📋 Monitor de Mercado", 
+    "⚙️ Dados Estruturais"
 ])
 
-# ------------------- TAB 1: VISÃO GLOBAL -------------------
+# ------------------- TAB 1: VISÃO GLOBAL & MACRO -------------------
 with tab1:
-    st.markdown("<h3 style='color: #f0f6fc; font-size: 1.2rem; margin-bottom:15px;'>Dinâmica Macro (Últimos 12 meses)</h3>", unsafe_allow_html=True)
     col1, col2 = st.columns(2)
     
     with col1:
@@ -282,7 +280,7 @@ with tab1:
             fig = go.Figure()
             fig.add_trace(go.Scatter(x=df_norm['Date'], y=df_norm['Ibovespa'], name='Ibovespa', line=dict(color='#58a6ff', width=2)))
             fig.add_trace(go.Scatter(x=df_norm['Date'], y=df_norm['Dólar'], name='Dólar', line=dict(color='#f9826c', width=2)))
-            fig.update_layout(template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', margin=dict(l=10, r=10, t=10, b=10), height=350, legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
+            fig.update_layout(template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', margin=dict(l=10, r=10, t=10, b=10), height=300, legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
             st.plotly_chart(fig, use_container_width=True)
             
     with col2:
@@ -293,12 +291,47 @@ with tab1:
         fig2 = go.Figure()
         fig2.add_trace(go.Scatter(x=df_selic_h['Date'], y=df_selic_h['SELIC'], name='SELIC (%)', line=dict(color='#3fb950')))
         fig2.add_trace(go.Scatter(x=df_ipca_h['Date'], y=df_ipca_h['IPCA'], name='IPCA 12M (%)', line=dict(color='#d15704')))
-        fig2.update_layout(template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', margin=dict(l=10, r=10, t=10, b=10), height=350, legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
+        fig2.update_layout(template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', margin=dict(l=10, r=10, t=10, b=10), height=300, legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
         st.plotly_chart(fig2, use_container_width=True)
 
-# ------------------- TAB 2: ANALYTICS QUANTITATIVO -------------------
+    # NOVO GRÁFICO: COMPARAÇÃO PARALELA DE TODAS AS AÇÕES
+    st.markdown("<hr style='border-color: #30363d; margin: 30px 0 20px 0;'/>", unsafe_allow_html=True)
+    st.markdown("<p style='color:#8b949e; font-size:0.85rem; font-weight:600; text-transform: uppercase;'>ANÁLISE DE CORRELAÇÃO PARALELA: TODAS AS AÇÕES DA CARTEIRA (BASE HISTÓRICA 100)</p>", unsafe_allow_html=True)
+    
+    df_all_stocks = get_historical_data(TICKERS_STOCKS, period="1y")
+    if not df_all_stocks.empty:
+        fig_comp = go.Figure()
+        for ticker in TICKERS_STOCKS:
+            col_name = f"Close_{ticker}"
+            if col_name in df_all_stocks.columns:
+                series_clean = df_all_stocks[col_name].dropna()
+                if not series_clean.empty:
+                    base_val = series_clean.iloc[0]
+                    norm_series = (df_all_stocks[col_name] / base_val) * 100
+                    fig_comp.add_trace(go.Scatter(
+                        x=df_all_stocks['Date'], 
+                        y=norm_series, 
+                        name=ticker.replace('.SA', ''),
+                        mode='lines',
+                        line=dict(width=1.5),
+                        hovertemplate="%{hovertext}<br>Desempenho: %{y:.1f}%<extra></extra>",
+                        hovertext=ticker.replace('.SA', '')
+                    ))
+        fig_comp.update_layout(
+            template="plotly_dark", 
+            paper_bgcolor='rgba(0,0,0,0)', 
+            plot_bgcolor='rgba(0,0,0,0)',
+            margin=dict(l=10, r=10, t=15, b=10), 
+            height=450,
+            xaxis=dict(title="Período"),
+            yaxis=dict(title="Retorno Acumulado (%)"),
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0)
+        )
+        st.plotly_chart(fig_comp, use_container_width=True)
+
+# ------------------- TAB 2: ANÁLISE QUANTITATIVA -------------------
 with tab2:
-    st.markdown("<h3 style='color: #f0f6fc; font-size: 1.2rem;'>Desestruturação e Análise de Risco</h3>", unsafe_allow_html=True)
+    st.markdown("<h3 style='color: #f0f6fc; font-size: 1.2rem;'>Análise de Risco e Volatilidade Individual</h3>", unsafe_allow_html=True)
     
     c_sel1, c_sel2 = st.columns([2, 1])
     with c_sel1:
@@ -315,36 +348,36 @@ with tab2:
         current_close = quant_df['Close'].iloc[-1]
         
         q_col1.metric("Volatilidade Histórica (21d Anualizada)", f"{current_vol:.2f}%")
-        q_col2.metric("Maximum Drawdown do Período", f"{max_dd:.2f}%")
+        q_col2.metric("Drawdown Máximo do Período", f"{max_dd:.2f}%")
         q_col3.metric("Último Fechamento", f"R$ {current_close:.2f}")
         
-        # Gráficos Quant
+        # Gráficos Quantitativos
         fig_price = go.Figure()
-        fig_price.add_trace(go.Scatter(x=quant_df['Date'], y=quant_df['Close'], name='Preço Base', line=dict(color='#f0f6fc')))
-        fig_price.add_trace(go.Scatter(x=quant_df['Date'], y=quant_df['MMA_50'], name='MMA 50', line=dict(color='#f9826c', dash='dash')))
-        fig_price.add_trace(go.Scatter(x=quant_df['Date'], y=quant_df['MMA_200'], name='MMA 200', line=dict(color='#58a6ff', dash='dot')))
-        fig_price.update_layout(title="Rastreamento de Tendências & Médias Móveis", template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', height=300)
+        fig_price.add_trace(go.Scatter(x=quant_df['Date'], y=quant_df['Close'], name='Preço', line=dict(color='#f0f6fc')))
+        fig_price.add_trace(go.Scatter(x=quant_df['Date'], y=quant_df['MMA_50'], name='Média Móvel 50 dias', line=dict(color='#f9826c', dash='dash')))
+        fig_price.add_trace(go.Scatter(x=quant_df['Date'], y=quant_df['MMA_200'], name='Média Móvel 200 dias', line=dict(color='#58a6ff', dash='dot')))
+        fig_price.update_layout(title="Tendências de Preço & Médias Móveis", template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', height=300)
         st.plotly_chart(fig_price, use_container_width=True)
         
         fig_vol = go.Figure()
-        fig_vol.add_trace(go.Scatter(x=quant_df['Date'], y=quant_df['Vol_21d'], name='Vol 21d', fill='tozeroy', line=dict(color='#dbab09')))
-        fig_vol.update_layout(title="Cluster de Volatilidade Móvel (%)", template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', height=220)
+        fig_vol.add_trace(go.Scatter(x=quant_df['Date'], y=quant_df['Vol_21d'], name='Volatilidade', fill='tozeroy', line=dict(color='#dbab09')))
+        fig_vol.update_layout(title="Volatilidade Móvel Histórica (%)", template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', height=220)
         st.plotly_chart(fig_vol, use_container_width=True)
     else:
         st.error("Dados indisponíveis para o ativo ou período selecionado.")
 
-# ------------------- TAB 3: SCREENERS DE MERCADO -------------------
+# ------------------- TAB 3: MONITOR DE MERCADO (SCREENERS) -------------------
 with tab3:
     st.markdown("<h3 style='color: #f0f6fc; font-size: 1.2rem; margin-bottom: 15px;'>Monitor de Liquidez B3</h3>", unsafe_allow_html=True)
     
     config_tabela = {
-        "Ticker": st.column_config.TextColumn("Ativo", width="small"),
+        "Ativo": st.column_config.TextColumn("Ativo", width="small"),
         "Preço": st.column_config.NumberColumn("Último Preço", format="R$ %.2f"),
         "Variação (%)": st.column_config.NumberColumn("Retorno Diário", format="%.2f%%"),
         "Volume Diário": st.column_config.NumberColumn("Volume Financeiro", format="%d")
     }
     
-    sub_tab1, sub_tab2 = st.tabs(["⚡ Ações de Alta Liquidez", "🏢 Real Estate (FIIs)"])
+    sub_tab1, sub_tab2 = st.tabs(["⚡ Ações (Alta Liquidez)", "🏢 Fundos Imobiliários (FIIs)"])
     
     with sub_tab1:
         df_stocks = get_batch_assets(TICKERS_STOCKS)
@@ -354,14 +387,14 @@ with tab3:
         df_fiis = get_batch_assets(TICKERS_FIIS)
         st.dataframe(df_fiis, column_config=config_tabela, use_container_width=True, hide_index=True)
 
-# ------------------- TAB 4: FUNDAMENTOS -------------------
+# ------------------- TAB 4: DADOS ESTRUTURAIS -------------------
 with tab4:
-    st.markdown("<h3 style='color: #f0f6fc; font-size: 1.2rem; margin-bottom: 15px;'>Dados Estruturais Macroeconômicos</h3>", unsafe_allow_html=True)
+    st.markdown("<h3 style='color: #f0f6fc; font-size: 1.2rem; margin-bottom: 15px;'>Dados Estruturais da Economia</h3>", unsafe_allow_html=True)
     
     macro_data = {
-        'Indicador Estrutural': ['PIB Corrente Real', 'Taxa de Desemprego (PNAD)', 'Balança Comercial (YTD)', 'Dívida Bruta / PIB'],
-        'Métrica': ['R$ 10,9 Trilhões', '6.4%', 'US$ 98.4 Bilhões', '74.5%'],
-        'Dataset de Origem': ['IBGE', 'IBGE', 'MDIC', 'Banco Central']
+        'Indicador Econômico': ['PIB Corrente Real', 'Taxa de Desemprego (PNAD)', 'Balança Comercial (Acum. Ano)', 'Dívida Bruta / PIB'],
+        'Valor Atual': ['R$ 10,9 Trilhões', '6.4%', 'US$ 98.4 Bilhões', '74.5%'],
+        'Fonte dos Dados': ['IBGE', 'IBGE', 'MDIC', 'Banco Central']
     }
     st.table(pd.DataFrame(macro_data))
     
