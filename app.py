@@ -116,16 +116,52 @@ TICKERS_FIIS = [
     'HGLG11.SA', 'KNRI11.SA', 'VISC11.SA', 'MXRF11.SA', 'XPLG11.SA'
 ]
 
+# ------------------- FUNÇÃO AUXILIAR: CONVERTE NÚMERO BR (VÍRGULA) -------------------
+def parse_br_number(valor):
+    """Converte string brasileira (ex: '10,50' ou '1.000,50') para float."""
+    if isinstance(valor, (int, float)):
+        return float(valor)
+    s = str(valor).strip()
+    # Remove pontos de milhar e troca vírgula decimal por ponto
+    s = s.replace('.', '').replace(',', '.')
+    try:
+        return float(s)
+    except ValueError:
+        return None
+
 # ------------------- FUNÇÕES DE BUSCA OTIMIZADAS -------------------
 @st.cache_data(ttl=300)
 def get_macro_bcb(serie):
+    """Busca o último valor de uma série do BCB."""
     try:
         url = f"https://api.bcb.gov.br/dados/serie/bcdata.sgs.{serie}/dados/ultimos/1?formato=json"
-        data = requests.get(url, timeout=5).json()
-        return float(data[0]['valor'])
+        response = requests.get(url, timeout=5)
+        response.raise_for_status()
+        data = response.json()
+        if data and len(data) > 0:
+            valor_bruto = data[0]['valor']
+            return parse_br_number(valor_bruto)
     except Exception:
-        fallback = {432: 10.50, 12: 10.40, 4447: 4.50}
-        return fallback.get(serie, 0.0)
+        return None
+
+@st.cache_data(ttl=86400)  # Atualiza 1x por dia (dados macro mudam devagar)
+def get_annual_gdp():
+    """Busca os 4 últimos trimestres do PIB e soma para obter o PIB Anual Corrente."""
+    try:
+        url = "https://api.bcb.gov.br/dados/serie/bcdata.sgs.22099/dados?formato=json"
+        response = requests.get(url, timeout=10)
+        response.raise_for_status()
+        data = response.json()
+        if not data:
+            return None
+        df = pd.DataFrame(data)
+        df['data'] = pd.to_datetime(df['data'], dayfirst=True)
+        df['valor'] = df['valor'].apply(parse_br_number)
+        df = df.sort_values('data').tail(4)  # últimos 4 trimestres
+        total_milhoes = df['valor'].sum()
+        return total_milhoes / 1e12  # Converte para trilhões
+    except Exception:
+        return None
 
 @st.cache_data(ttl=300)
 def get_market_summary():
@@ -187,10 +223,14 @@ def get_historical_data(tickers, period="1y"):
 def get_historical_macro(serie, name, days=365):
     try:
         url = f"https://api.bcb.gov.br/dados/serie/bcdata.sgs.{serie}/dados?formato=json"
-        data = requests.get(url, timeout=5).json()
+        response = requests.get(url, timeout=5)
+        response.raise_for_status()
+        data = response.json()
+        if not data:
+            return pd.DataFrame(columns=['Date', name])
         df = pd.DataFrame(data)
         df['data'] = pd.to_datetime(df['data'], dayfirst=True)
-        df['valor'] = df['valor'].astype(float)
+        df['valor'] = df['valor'].apply(parse_br_number)
         start_date = datetime.now() - timedelta(days=days)
         df = df[df['data'] >= start_date].sort_values('data')
         df['Date'] = df['data'].dt.date
@@ -199,7 +239,6 @@ def get_historical_macro(serie, name, days=365):
         return pd.DataFrame(columns=['Date', name])
 
 def calculate_quant_metrics(ticker, period="1y"):
-    """Usa .history() para garantir retorno limpo sem erros de MultiIndex."""
     try:
         objeto_ticker = yf.Ticker(ticker)
         df = objeto_ticker.history(period=period)
@@ -221,10 +260,17 @@ def calculate_quant_metrics(ticker, period="1y"):
 
 # ------------------- CARREGAMENTO DE DADOS -------------------
 summary = get_market_summary()
-selic = get_macro_bcb(432)
-cdi = get_macro_bcb(12)
-ipca = get_macro_bcb(4447)
-juro_real = (((1 + (selic/100)) / (1 + (ipca/100))) - 1) * 100
+selic = get_macro_bcb(432)          # Taxa SELIC diária (anualizada)
+cdi = get_macro_bcb(12)             # Taxa CDI diária (anualizada)
+ipca = get_macro_bcb(4447)          # IPCA acumulado 12 meses
+
+# Se algum dado não veio, coloca um valor padrão "N/A" visualmente
+if selic is None:
+    selic = 0.0
+if ipca is None:
+    ipca = 0.0
+
+juro_real = (((1 + (selic/100)) / (1 + (ipca/100))) - 1) * 100 if (selic and ipca) else 0.0
 
 # ------------------- BARRA LATERAL (SIDEBAR) -------------------
 with st.sidebar:
@@ -241,11 +287,12 @@ with st.sidebar:
     
     st.markdown("<hr style='border-color: #30363d; margin: 25px 0;'/>", unsafe_allow_html=True)
     st.subheader("📌 Política Monetária")
-    st.metric("SELIC Meta", f"{selic:.2f}%")
+    
+    st.metric("SELIC Meta", f"{selic:.2f}%" if selic != 0.0 else "Indisponível")
     st.markdown("<div style='margin-bottom: 12px;'></div>", unsafe_allow_html=True)
-    st.metric("IPCA (Acum. 12m)", f"{ipca:.2f}%")
+    st.metric("IPCA (Acum. 12m)", f"{ipca:.2f}%" if ipca != 0.0 else "Indisponível")
     st.markdown("<div style='margin-bottom: 12px;'></div>", unsafe_allow_html=True)
-    st.metric("Juro Real Estimado", f"{juro_real:.2f}%")
+    st.metric("Juro Real Estimado", f"{juro_real:.2f}%" if juro_real != 0.0 else "Indisponível")
     
     st.markdown("<hr style='border-color: #30363d; margin: 25px 0;'/>", unsafe_allow_html=True)
     st.caption(f"Atualizado em: {datetime.now().strftime('%H:%M:%S')} BRT")
@@ -285,12 +332,15 @@ with tab1:
             
     with col2:
         st.markdown("<p style='color:#8b949e; font-size:0.85rem; font-weight:600;'>SPREAD HISTÓRICO: SELIC VS INFLAÇÃO (IPCA)</p>", unsafe_allow_html=True)
-        df_selic_h = get_historical_macro(4390, "SELIC", days=365)
+        # Usando série 432 para SELIC histórica também
+        df_selic_h = get_historical_macro(432, "SELIC", days=365)
         df_ipca_h = get_historical_macro(4447, "IPCA", days=365)
         
         fig2 = go.Figure()
-        fig2.add_trace(go.Scatter(x=df_selic_h['Date'], y=df_selic_h['SELIC'], name='SELIC (%)', line=dict(color='#3fb950')))
-        fig2.add_trace(go.Scatter(x=df_ipca_h['Date'], y=df_ipca_h['IPCA'], name='IPCA 12M (%)', line=dict(color='#d15704')))
+        if not df_selic_h.empty:
+            fig2.add_trace(go.Scatter(x=df_selic_h['Date'], y=df_selic_h['SELIC'], name='SELIC (%)', line=dict(color='#3fb950')))
+        if not df_ipca_h.empty:
+            fig2.add_trace(go.Scatter(x=df_ipca_h['Date'], y=df_ipca_h['IPCA'], name='IPCA 12M (%)', line=dict(color='#d15704')))
         fig2.update_layout(template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', margin=dict(l=10, r=10, t=10, b=10), height=300, legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
         st.plotly_chart(fig2, use_container_width=True)
 
@@ -387,14 +437,26 @@ with tab3:
         df_fiis = get_batch_assets(TICKERS_FIIS)
         st.dataframe(df_fiis, column_config=config_tabela, use_container_width=True, hide_index=True)
 
-# ------------------- TAB 4: DADOS ESTRUTURAIS -------------------
+# ------------------- TAB 4: DADOS ESTRUTURAIS (AGORA DINÂMICO!) -------------------
 with tab4:
     st.markdown("<h3 style='color: #f0f6fc; font-size: 1.2rem; margin-bottom: 15px;'>Dados Estruturais da Economia</h3>", unsafe_allow_html=True)
     
+    # Busca os dados AO VIVO
+    gdp_annual = get_annual_gdp()
+    unemployment = get_macro_bcb(24369)   # Taxa de desemprego PNAD
+    trade_balance = get_macro_bcb(26073)  # Balança comercial (acum. ano) em US$ milhões
+    gross_debt = get_macro_bcb(13790)     # Dívida bruta / PIB
+    
+    # Formatação para exibição
+    gdp_str = f"R$ {gdp_annual:.1f} Trilhões" if gdp_annual else "Indisponível"
+    unemp_str = f"{unemployment:.1f}%" if unemployment is not None else "Indisponível"
+    trade_str = f"US$ {trade_balance/1000:.1f} Bilhões" if trade_balance else "Indisponível" # Converte milhões para bilhões
+    debt_str = f"{gross_debt:.1f}%" if gross_debt is not None else "Indisponível"
+    
     macro_data = {
         'Indicador Econômico': ['PIB Corrente Real', 'Taxa de Desemprego (PNAD)', 'Balança Comercial (Acum. Ano)', 'Dívida Bruta / PIB'],
-        'Valor Atual': ['R$ 10,9 Trilhões', '6.4%', 'US$ 98.4 Bilhões', '74.5%'],
-        'Fonte dos Dados': ['IBGE', 'IBGE', 'MDIC', 'Banco Central']
+        'Valor Atual': [gdp_str, unemp_str, trade_str, debt_str],
+        'Fonte dos Dados': ['IBGE / BCB (SGS 22099)', 'IBGE / BCB (SGS 24369)', 'MDIC / BCB (SGS 26073)', 'Banco Central (SGS 13790)']
     }
     st.table(pd.DataFrame(macro_data))
     
