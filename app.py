@@ -17,23 +17,19 @@ st.set_page_config(
 # ------------------- ESTILIZAÇÃO CUSTOMIZADA (CSS) -------------------
 custom_css = """
 <style>
-    /* Importação de fonte profissional */
     @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Inter:wght@300;400;600;700&display=swap');
     
-    /* Reset e fontes globais */
     html, body, [data-testid="stAppViewContainer"] {
         font-family: 'Inter', sans-serif;
         background-color: #0d1117;
     }
     
-    /* Títulos e Headers */
     h1, h2, h3 {
         font-family: 'Inter', sans-serif;
         font-weight: 700 !important;
         letter-spacing: -0.02em;
     }
     
-    /* Estilização dos Blocos de Métricas Nativos do Streamlit */
     div[data-testid="stMetric"] {
         background-color: #161b22;
         border: 1px solid #30363d;
@@ -58,7 +54,6 @@ custom_css = """
         color: #f0f6fc !important;
     }
     
-    /* Customização de Tabs (Abas) */
     button[data-baseweb="tab"] {
         font-size: 0.95rem;
         font-weight: 600;
@@ -71,20 +66,17 @@ custom_css = """
         border-bottom-color: #58a6ff !important;
     }
     
-    /* Tabelas e Dataframes */
     div[data-testid="stDataFrame"] {
         background-color: #161b22;
         border: 1px solid #30363d;
         border-radius: 8px;
     }
 
-    /* Ajustes na Barra Lateral */
     section[data-testid="stSidebar"] {
         background-color: #0d1117;
         border-right: 1px solid #30363d;
     }
     
-    /* Badge de Status "LIVE" */
     .live-badge {
         display: inline-flex;
         align-items: center;
@@ -139,12 +131,16 @@ def get_macro_bcb(serie):
 def get_market_summary():
     try:
         df = yf.download(["^BVSP", "USDBRL=X"], period="2d", progress=False)
-        ibov_hoje = df['Close']['^BVSP'].iloc[-1]
-        ibov_ontem = df['Close']['^BVSP'].iloc[-2]
+        # Normalização de colunas para evitar MultiIndex
+        if isinstance(df.columns, pd.MultiIndex):
+            df.columns = ['_'.join(col).strip() for col in df.columns]
+            
+        ibov_hoje = df['Close_^BVSP'].iloc[-1]
+        ibov_ontem = df['Close_^BVSP'].iloc[-2]
         ibov_pct = ((ibov_hoje / ibov_ontem) - 1) * 100
         
-        dolar_hoje = df['Close']['USDBRL=X'].iloc[-1]
-        dolar_ontem = df['Close']['USDBRL=X'].iloc[-2]
+        dolar_hoje = df['Close_USDBRL=X'].iloc[-1]
+        dolar_ontem = df['Close_USDBRL=X'].iloc[-2]
         dolar_pct = ((dolar_hoje / dolar_ontem) - 1) * 100
         return {'ibov': ibov_hoje, 'ibov_pct': ibov_pct, 'dolar': dolar_hoje, 'dolar_pct': dolar_pct}
     except Exception:
@@ -154,12 +150,17 @@ def get_market_summary():
 def get_batch_assets(tickers):
     try:
         df = yf.download(tickers, period="5d", progress=False)
+        if isinstance(df.columns, pd.MultiIndex):
+            df.columns = ['_'.join(col).strip() for col in df.columns]
+            
         data = []
         for ticker in tickers:
-            if ticker in df['Close'].columns:
-                close_hoje = df['Close'][ticker].dropna().iloc[-1]
-                close_ontem = df['Close'][ticker].dropna().iloc[-2]
-                v_vol = df['Volume'][ticker].dropna().iloc[-1] if ticker in df['Volume'].columns else 0
+            col_close = f"Close_{ticker}"
+            col_vol = f"Volume_{ticker}"
+            if col_close in df.columns:
+                close_hoje = df[col_close].dropna().iloc[-1]
+                close_ontem = df[col_close].dropna().iloc[-2]
+                v_vol = df[col_vol].dropna().iloc[-1] if col_vol in df.columns else 0
                 var = ((close_hoje / close_ontem) - 1) * 100
                 data.append({
                     'Ticker': ticker.replace('.SA', ''),
@@ -174,7 +175,10 @@ def get_batch_assets(tickers):
 @st.cache_data(ttl=3600)
 def get_historical_data(tickers, period="1y"):
     try:
-        df = yf.download(tickers, period=period, progress=False)['Close'].reset_index()
+        df = yf.download(tickers, period=period, progress=False)
+        if isinstance(df.columns, pd.MultiIndex):
+            df.columns = ['_'.join(col).strip() for col in df.columns]
+        df = df.reset_index()
         df['Date'] = pd.to_datetime(df['Date']).dt.date
         return df
     except Exception:
@@ -196,15 +200,25 @@ def get_historical_macro(serie, name, days=365):
         return pd.DataFrame(columns=['Date', name])
 
 def calculate_quant_metrics(ticker, period="1y"):
-    df = yf.download(ticker, period=period, progress=False)
-    if df.empty: return None
-    df['Returns'] = df['Close'].pct_change()
-    df['Vol_21d'] = df['Returns'].rolling(21).std() * np.sqrt(252) * 100
-    df['MMA_50'] = df['Close'].rolling(50).mean()
-    df['MMA_200'] = df['Close'].rolling(200).mean()
-    rolling_max = df['Close'].cummax()
-    df['Drawdown'] = (df['Close'] - rolling_max) / rolling_max * 100
-    return df.reset_index()
+    """Usa .history() para garantir retorno unidimensional limpo e sem erros de tipo."""
+    try:
+        objeto_ticker = yf.Ticker(ticker)
+        df = objeto_ticker.history(period=period)
+        if df.empty: 
+            return None
+            
+        df = df.reset_index()
+        df['Date'] = pd.to_datetime(df['Date']).dt.date
+        df['Returns'] = df['Close'].pct_change()
+        df['Vol_21d'] = df['Returns'].rolling(21).std() * np.sqrt(252) * 100
+        df['MMA_50'] = df['Close'].rolling(50).mean()
+        df['MMA_200'] = df['Close'].rolling(200).mean()
+        
+        rolling_max = df['Close'].cummax()
+        df['Drawdown'] = (df['Close'] - rolling_max) / rolling_max * 100
+        return df
+    except Exception:
+        return None
 
 # ------------------- DATA LOADING -------------------
 summary = get_market_summary()
@@ -224,7 +238,7 @@ with st.sidebar:
     
     st.metric("Ibovespa", f"{summary['ibov']:,.0f}".replace(",", "."), f"{summary['ibov_pct']:.2f}%")
     st.markdown("<div style='margin-bottom: 12px;'></div>", unsafe_allow_html=True)
-    st.metric("Dólar Commercial", f"R$ {summary['dolar']:.4f}", f"{summary['dolar_pct']:.2f}%")
+    st.metric("Dólar Comercial", f"R$ {summary['dolar']:.4f}", f"{summary['dolar_pct']:.2f}%")
     
     st.markdown("<hr style='border-color: #30363d; margin: 25px 0;'/>", unsafe_allow_html=True)
     st.subheader("📌 Política Monetária")
@@ -238,7 +252,6 @@ with st.sidebar:
     st.caption(f"Refreshed at: {datetime.now().strftime('%H:%M:%S')} BRT")
 
 # ------------------- CORPO PRINCIPAL -------------------
-# Header customizado em HTML puro para um visual arrojado
 st.markdown("""
     <div style="background: linear-gradient(90deg, #161b22 0%, #0d1117 100%); padding: 20px; border-radius: 8px; border: 1px solid #30363d; margin-bottom: 25px;">
         <h1 style="margin: 0; color: #f0f6fc; font-size: 2rem;">Market Analytics & Quantitative Dashboard</h1>
@@ -261,10 +274,10 @@ with tab1:
     with col1:
         st.markdown("<p style='color:#8b949e; font-size:0.85rem; font-weight:600;'>PERFORMANCE RELATIVA: IBOVESPA VS DÓLAR (BASE 100)</p>", unsafe_allow_html=True)
         df_hist = get_historical_data(["^BVSP", "USDBRL=X"], period="1y")
-        if not df_hist.empty:
-            df_norm = df_hist.copy().dropna()
-            df_norm['Ibovespa'] = (df_norm['^BVSP'] / df_norm['^BVSP'].iloc[0]) * 100
-            df_norm['Dólar'] = (df_norm['USDBRL=X'] / df_norm['USDBRL=X'].iloc[0]) * 100
+        if not df_hist.empty and 'Close_^BVSP' in df_hist.columns:
+            df_norm = df_hist.copy().dropna(subset=['Close_^BVSP', 'Close_USDBRL=X'])
+            df_norm['Ibovespa'] = (df_norm['Close_^BVSP'] / df_norm['Close_^BVSP'].iloc[0]) * 100
+            df_norm['Dólar'] = (df_norm['Close_USDBRL=X'] / df_norm['Close_USDBRL=X'].iloc[0]) * 100
             
             fig = go.Figure()
             fig.add_trace(go.Scatter(x=df_norm['Date'], y=df_norm['Ibovespa'], name='Ibovespa', line=dict(color='#58a6ff', width=2)))
@@ -299,10 +312,11 @@ with tab2:
         q_col1, q_col2, q_col3 = st.columns(3)
         current_vol = quant_df['Vol_21d'].iloc[-1]
         max_dd = quant_df['Drawdown'].min()
+        current_close = quant_df['Close'].iloc[-1]
         
         q_col1.metric("Volatilidade Histórica (21d Anualizada)", f"{current_vol:.2f}%")
         q_col2.metric("Maximum Drawdown do Período", f"{max_dd:.2f}%")
-        q_col3.metric("Último Fechamento", f"R$ {quant_df['Close'].iloc[-1]:.2f}")
+        q_col3.metric("Último Fechamento", f"R$ {current_close:.2f}")
         
         # Gráficos Quant
         fig_price = go.Figure()
@@ -316,6 +330,8 @@ with tab2:
         fig_vol.add_trace(go.Scatter(x=quant_df['Date'], y=quant_df['Vol_21d'], name='Vol 21d', fill='tozeroy', line=dict(color='#dbab09')))
         fig_vol.update_layout(title="Cluster de Volatilidade Móvel (%)", template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', height=220)
         st.plotly_chart(fig_vol, use_container_width=True)
+    else:
+        st.error("Dados indisponíveis para o ativo ou período selecionado.")
 
 # ------------------- TAB 3: SCREENERS DE MERCADO -------------------
 with tab3:
