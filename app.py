@@ -31,286 +31,82 @@ st.set_page_config(
 # ------------------- ESTILIZAÇÃO CUSTOMIZADA (CSS) -------------------
 custom_css = """
 <style>
-    @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap');
-
-    :root {
-        --bg-primary: #0a0e16;
-        --bg-secondary: #11161f;
-        --bg-card-from: #141a24;
-        --bg-card-to: #0e131b;
-        --border-subtle: rgba(148, 163, 184, 0.14);
-        --border-hover: rgba(88, 166, 255, 0.5);
-        --text-primary: #f0f6fc;
-        --text-secondary: #8b949e;
-        --text-tertiary: #5c6673;
-        --accent-sapphire: #4d8eff;
-        --accent-sapphire-glow: rgba(77, 142, 255, 0.35);
-        --accent-ice: #7dd3fc;
-        --accent-green: #3fb950;
-        --accent-red: #f85149;
-        --radius-md: 10px;
-        --radius-lg: 16px;
-        --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.45), 0 10px 26px -12px rgba(0, 0, 0, 0.55);
-    }
-
+    @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Inter:wght@300;400;600;700&display=swap');
+    
     html, body, [data-testid="stAppViewContainer"] {
         font-family: 'Inter', sans-serif;
-        background-color: var(--bg-primary);
+        background-color: #0d1117;
     }
-
-    /* Textura de grão sutil — só um leve "ruído" de papel para tirar a frieza do dark mode liso.
-       pointer-events:none garante que ela nunca intercepta cliques. */
-    [data-testid="stAppViewContainer"] { position: relative; }
-    [data-testid="stAppViewContainer"]::before {
-        content: "";
-        position: fixed;
-        inset: 0;
-        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.5'/%3E%3C/svg%3E");
-        opacity: 0.025;
-        mix-blend-mode: overlay;
-        pointer-events: none;
-        z-index: 0;
-    }
-
+    
     h1, h2, h3 {
-        font-family: 'Space Grotesk', sans-serif;
+        font-family: 'Inter', sans-serif;
         font-weight: 700 !important;
         letter-spacing: -0.02em;
-        color: var(--text-primary);
     }
-
-    /* ---------- Fita de cotações (signature element) ---------- */
-    .ticker-tape {
-        position: relative;
-        width: 100%;
-        overflow: hidden;
-        background: linear-gradient(90deg, var(--bg-secondary), #161d29, var(--bg-secondary));
-        border: 1px solid var(--border-subtle);
-        border-radius: 999px;
-        padding: 11px 0;
-        margin-bottom: 22px;
-    }
-    .ticker-tape::before, .ticker-tape::after {
-        content: "";
-        position: absolute;
-        top: 0; bottom: 0;
-        width: 64px;
-        z-index: 2;
-        pointer-events: none;
-    }
-    .ticker-tape::before { left: 0; background: linear-gradient(90deg, var(--bg-secondary), transparent); }
-    .ticker-tape::after { right: 0; background: linear-gradient(270deg, var(--bg-secondary), transparent); }
-    .ticker-track {
-        display: flex;
-        width: max-content;
-        animation: ticker-scroll 34s linear infinite;
-    }
-    .ticker-tape:hover .ticker-track { animation-play-state: paused; }
-    @keyframes ticker-scroll {
-        from { transform: translateX(0); }
-        to { transform: translateX(-50%); }
-    }
-    .ticker-item {
-        display: flex;
-        align-items: center;
-        gap: 9px;
-        padding: 0 26px;
-        border-right: 1px solid var(--border-subtle);
-        white-space: nowrap;
-        font-family: 'JetBrains Mono', monospace;
-    }
-    .ticker-label { color: var(--text-tertiary); font-size: 0.68rem; letter-spacing: 0.09em; font-weight: 600; }
-    .ticker-value { color: var(--text-primary); font-weight: 700; font-size: 0.85rem; }
-    .ticker-value.up { color: var(--accent-green); }
-    .ticker-value.down { color: var(--accent-red); }
-    .ticker-delta { font-size: 0.78rem; font-weight: 600; }
-    .ticker-delta.up { color: var(--accent-green); }
-    .ticker-delta.down { color: var(--accent-red); }
-
-    /* ---------- Banner principal ---------- */
-    .hero-banner {
-        position: relative;
-        background:
-            radial-gradient(circle at 12% 18%, rgba(77, 142, 255, 0.16), transparent 45%),
-            linear-gradient(135deg, #121826 0%, #0a0e16 100%);
-        border: 1px solid var(--border-subtle);
-        border-radius: var(--radius-lg);
-        padding: 28px 32px;
-        margin-bottom: 26px;
-        overflow: hidden;
-    }
-    .hero-banner::after {
-        content: "";
-        position: absolute;
-        inset: 0;
-        background-image:
-            linear-gradient(rgba(255, 255, 255, 0.025) 1px, transparent 1px),
-            linear-gradient(90deg, rgba(255, 255, 255, 0.025) 1px, transparent 1px);
-        background-size: 34px 34px;
-        pointer-events: none;
-    }
-    .hero-tag {
-        position: relative;
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-        font-family: 'JetBrains Mono', monospace;
-        font-size: 0.7rem;
-        letter-spacing: 0.1em;
-        color: var(--accent-ice);
-        background: rgba(77, 142, 255, 0.1);
-        border: 1px solid rgba(77, 142, 255, 0.28);
-        padding: 5px 11px;
-        border-radius: 7px;
-        margin-bottom: 14px;
-    }
-    .hero-title { position: relative; margin: 0; font-size: 2rem; }
-    .hero-subtitle { position: relative; margin: 6px 0 0 0; color: var(--text-secondary); font-size: 0.95rem; max-width: 640px; }
-
-    /* ---------- Labels e títulos de seção ---------- */
-    .section-label {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        color: var(--text-tertiary);
-        font-size: 0.78rem;
-        font-weight: 700;
-        letter-spacing: 0.07em;
-        text-transform: uppercase;
-        margin-bottom: 12px;
-    }
-    .section-label::before {
-        content: "";
-        width: 6px; height: 6px;
-        border-radius: 50%;
-        background: var(--accent-sapphire);
-        flex-shrink: 0;
-    }
-    .section-title {
-        position: relative;
-        padding-left: 14px;
-        margin: 4px 0 18px 0 !important;
-        font-size: 1.2rem !important;
-    }
-    .section-title::before {
-        content: "";
-        position: absolute;
-        left: 0; top: 3px; bottom: 3px;
-        width: 3px;
-        border-radius: 3px;
-        background: linear-gradient(180deg, var(--accent-sapphire), var(--accent-ice));
-    }
-
-    hr, hr.divider {
-        border: none;
-        border-top: 1px solid var(--border-subtle);
-        margin: 24px 0 18px 0;
-    }
-    .disclaimer { font-size: 0.8rem; color: var(--text-tertiary); }
-    .metric-gap { margin-bottom: 12px; }
-
-    /* ---------- Cards de métrica ---------- */
+    
     div[data-testid="stMetric"] {
-        background: linear-gradient(160deg, var(--bg-card-from) 0%, var(--bg-card-to) 100%);
-        border: 1px solid var(--border-subtle);
-        border-radius: var(--radius-md);
+        background-color: #161b22;
+        border: 1px solid #30363d;
+        border-radius: 8px;
         padding: 15px 20px;
-        box-shadow: var(--shadow-card);
-        position: relative;
-        overflow: hidden;
-        transition: transform 0.22s ease, border-color 0.22s ease, box-shadow 0.22s ease;
-    }
-    div[data-testid="stMetric"]::before {
-        content: "";
-        position: absolute;
-        top: 0; left: 0; right: 0;
-        height: 2px;
-        background: linear-gradient(90deg, var(--accent-sapphire), var(--accent-ice));
-        opacity: 0;
-        transition: opacity 0.22s ease;
+        transition: transform 0.2s, border-color 0.2s;
     }
     div[data-testid="stMetric"]:hover {
-        border-color: var(--border-hover);
-        transform: translateY(-3px);
-        box-shadow: 0 14px 30px -12px var(--accent-sapphire-glow), var(--shadow-card);
+        border-color: #58a6ff;
+        transform: translateY(-2px);
     }
-    div[data-testid="stMetric"]:hover::before { opacity: 1; }
     div[data-testid="stMetricLabel"] > div {
-        color: var(--text-secondary) !important;
-        font-size: 0.82rem !important;
+        color: #8b949e !important;
+        font-size: 0.85rem !important;
         text-transform: uppercase;
         letter-spacing: 0.05em;
     }
     div[data-testid="stMetricValue"] > div {
-        font-family: 'JetBrains Mono', monospace;
+        font-family: 'JetBrains+Mono', monospace;
         font-weight: 700;
         font-size: 1.8rem !important;
-        color: var(--text-primary) !important;
+        color: #f0f6fc !important;
     }
-
-    /* ---------- Abas ---------- */
+    
     button[data-baseweb="tab"] {
-        font-family: 'Inter', sans-serif;
         font-size: 0.95rem;
         font-weight: 600;
-        color: var(--text-secondary);
+        color: #8b949e;
         border-bottom: 2px solid transparent;
         padding: 10px 20px;
-        transition: color 0.18s ease, border-color 0.18s ease;
     }
-    button[data-baseweb="tab"]:hover { color: var(--text-primary); }
     button[aria-selected="true"] {
-        color: var(--accent-ice) !important;
-        border-bottom-color: var(--accent-sapphire) !important;
+        color: #58a6ff !important;
+        border-bottom-color: #58a6ff !important;
     }
-
+    
     div[data-testid="stDataFrame"] {
-        background-color: var(--bg-secondary);
-        border: 1px solid var(--border-subtle);
-        border-radius: var(--radius-md);
-        overflow: hidden;
+        background-color: #161b22;
+        border: 1px solid #30363d;
+        border-radius: 8px;
     }
 
-    /* ---------- Sidebar ---------- */
     section[data-testid="stSidebar"] {
-        background-color: var(--bg-primary);
-        border-right: 1px solid var(--border-subtle);
+        background-color: #0d1117;
+        border-right: 1px solid #30363d;
     }
-    .sidebar-brand {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 22px;
-    }
-    .sidebar-brand h2 {
-        margin: 0;
-        font-size: 1.3rem;
-        letter-spacing: -0.01em;
-    }
-    .sidebar-eyebrow {
-        color: var(--text-secondary);
-        font-weight: 600;
-        font-size: 0.92rem;
-        margin: 4px 0 14px 0;
-    }
-
+    
     .live-badge {
         display: inline-flex;
         align-items: center;
         background: rgba(46, 160, 67, 0.15);
-        color: var(--accent-green);
+        color: #3fb950;
         padding: 4px 10px;
         border-radius: 20px;
-        font-size: 0.72rem;
+        font-size: 0.75rem;
         font-weight: 700;
         border: 1px solid rgba(46, 160, 67, 0.3);
-        font-family: 'JetBrains Mono', monospace;
-        letter-spacing: 0.04em;
+        font-family: 'JetBrains+Mono', monospace;
     }
     .pulse-dot {
         width: 8px;
         height: 8px;
-        background-color: var(--accent-green);
+        background-color: #3fb950;
         border-radius: 50%;
         margin-right: 6px;
         box-shadow: 0 0 0 0 rgba(63, 185, 80, 0.7);
@@ -321,12 +117,6 @@ custom_css = """
         70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(63, 185, 80, 0); }
         100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(63, 185, 80, 0); }
     }
-
-    /* ---------- Scrollbar customizada ---------- */
-    ::-webkit-scrollbar { width: 10px; height: 10px; }
-    ::-webkit-scrollbar-track { background: var(--bg-primary); }
-    ::-webkit-scrollbar-thumb { background: #1f2630; border-radius: 10px; }
-    ::-webkit-scrollbar-thumb:hover { background: var(--accent-sapphire); }
 </style>
 """
 st.markdown(custom_css, unsafe_allow_html=True)
@@ -374,32 +164,6 @@ def parse_br_number(valor):
         return float(s)
     except:
         return None
-
-def is_missing(value):
-    """Verifica se um valor é None ou NaN (cobre os dois jeitos de 'dado ausente')."""
-    if value is None:
-        return True
-    try:
-        return bool(pd.isna(value))
-    except (TypeError, ValueError):
-        return False
-
-def fmt_br(value, decimals=0, prefix="", suffix="", fallback="Indisponível"):
-    """Formata número no padrão BR (ponto como separador de milhar). Retorna fallback se ausente."""
-    if is_missing(value):
-        return fallback
-    texto = f"{value:,.{decimals}f}"
-    if decimals > 0:
-        texto = texto.replace(",", "X").replace(".", ",").replace("X", ".")
-    else:
-        texto = texto.replace(",", ".")
-    return f"{prefix}{texto}{suffix}"
-
-def fmt_pct(value, decimals=2, fallback="Indisponível"):
-    """Formata percentual com sinal, ou retorna fallback se o dado estiver ausente."""
-    if is_missing(value):
-        return fallback
-    return f"{value:.{decimals}f}%"
 
 # ------------------- FUNÇÕES DE BUSCA OTIMIZADAS -------------------
 @st.cache_data(ttl=300)
@@ -468,36 +232,21 @@ def get_annual_gdp():
 
 @st.cache_data(ttl=300)
 def get_market_summary():
-    """
-    Busca Ibovespa e Dólar. IMPORTANTE: o BVSP (B3) e o USDBRL=X (forex) não fecham
-    no mesmo horário, então a última linha do DataFrame combinado pode ter NaN para
-    um dos dois enquanto o outro já tem valor. Por isso cada série é tratada com
-    dropna() de forma independente, em vez de usar iloc[-1] direto na linha combinada.
-    """
     try:
-        # period maior dá margem de segurança em feriados/finais de semana
-        df = yf.download(["^BVSP", "USDBRL=X"], period="5d", progress=False)
+        df = yf.download(["^BVSP", "USDBRL=X"], period="2d", progress=False)
         if isinstance(df.columns, pd.MultiIndex):
             df.columns = ['_'.join(col).strip() for col in df.columns]
-
-        ibov_serie = df['Close_^BVSP'].dropna()
-        dolar_serie = df['Close_USDBRL=X'].dropna()
-
-        if len(ibov_serie) < 2 or len(dolar_serie) < 2:
-            raise ValueError("Histórico insuficiente após remover valores nulos.")
-
-        ibov_hoje = ibov_serie.iloc[-1]
-        ibov_ontem = ibov_serie.iloc[-2]
+            
+        ibov_hoje = df['Close_^BVSP'].iloc[-1]
+        ibov_ontem = df['Close_^BVSP'].iloc[-2]
         ibov_pct = ((ibov_hoje / ibov_ontem) - 1) * 100
-
-        dolar_hoje = dolar_serie.iloc[-1]
-        dolar_ontem = dolar_serie.iloc[-2]
+        
+        dolar_hoje = df['Close_USDBRL=X'].iloc[-1]
+        dolar_ontem = df['Close_USDBRL=X'].iloc[-2]
         dolar_pct = ((dolar_hoje / dolar_ontem) - 1) * 100
         return {'ibov': ibov_hoje, 'ibov_pct': ibov_pct, 'dolar': dolar_hoje, 'dolar_pct': dolar_pct}
-    except Exception as e:
-        print(f"Erro ao buscar resumo de mercado: {e}")
-        # None (em vez de número fixo) para a UI exibir "Indisponível" de forma honesta
-        return {'ibov': None, 'ibov_pct': None, 'dolar': None, 'dolar_pct': None}
+    except Exception:
+        return {'ibov': 120000.0, 'ibov_pct': 0.0, 'dolar': 5.0, 'dolar_pct': 0.0}
 
 @st.cache_data(ttl=300)
 def get_batch_assets(tickers):
@@ -576,42 +325,6 @@ def calculate_quant_metrics(ticker, period="1y"):
     except Exception:
         return None
 
-# ------------------- FUNÇÕES DE RENDERIZAÇÃO (UI) -------------------
-def render_ticker_tape(summary, selic, ipca, juro_real):
-    """
-    Fita de cotações estilo terminal financeiro, rolando continuamente no topo da página.
-    A sequência de itens é duplicada para o loop de CSS ficar perfeito, sem 'salto' visível.
-    """
-    def item(label, value_html, delta=None, value_class=""):
-        value_class_attr = f" {value_class}" if value_class else ""
-        if delta is None or is_missing(delta):
-            delta_html = ""
-        else:
-            arrow = "▲" if delta >= 0 else "▼"
-            cls = "up" if delta >= 0 else "down"
-            delta_html = f"<span class='ticker-delta {cls}'>{arrow} {abs(delta):.2f}%</span>"
-        return f"""<div class="ticker-item">
-            <span class="ticker-label">{label}</span>
-            <span class="ticker-value{value_class_attr}">{value_html}</span>
-            {delta_html}
-        </div>"""
-
-    juro_cls = "" if is_missing(juro_real) else ("up" if juro_real >= 0 else "down")
-
-    items = [
-        item("IBOVESPA", fmt_br(summary['ibov'], decimals=0), summary['ibov_pct']),
-        item("USD/BRL", fmt_br(summary['dolar'], decimals=4, prefix="R$ "), summary['dolar_pct']),
-        item("SELIC META", fmt_pct(selic)),
-        item("IPCA 12M", fmt_pct(ipca)),
-        item("JURO REAL", fmt_pct(juro_real), value_class=juro_cls),
-    ]
-    track_html = "".join(items) * 2  # duplicado para o scroll contínuo (efeito "fita infinita")
-
-    st.markdown(
-        f'<div class="ticker-tape"><div class="ticker-track">{track_html}</div></div>',
-        unsafe_allow_html=True
-    )
-
 # ------------------- CARREGAMENTO DE DADOS -------------------
 summary = get_market_summary()
 selic = get_macro_bcb(432)          # Taxa SELIC diária (anualizada)
@@ -620,46 +333,45 @@ cdi = get_macro_bcb(12)             # Taxa CDI diária (anualizada) - não usado
 # --- IPCA agora é calculado a partir dos dados mensais ---
 ipca = get_ipca_acumulado_12m()
 
-# Cálculo do juro real (Fisher) - só roda se os dois insumos vieram com sucesso.
-# Antes, None era trocado por 0.0 aqui, o que misturava "dado ausente" com "taxa zero" de verdade.
-if not is_missing(selic) and not is_missing(ipca):
-    juro_real = (((1 + (selic / 100)) / (1 + (ipca / 100))) - 1) * 100
-else:
-    juro_real = None
+# Se algum dado não veio, coloca um valor padrão "N/A" visualmente
+if selic is None:
+    selic = 0.0
+if ipca is None:
+    ipca = 0.0
+
+# Cálculo do juro real
+juro_real = (((1 + (selic/100)) / (1 + (ipca/100))) - 1) * 100 if (selic and ipca) else 0.0
 
 # ------------------- BARRA LATERAL (SIDEBAR) -------------------
 with st.sidebar:
     st.markdown("""
-        <div class="sidebar-brand">
-            <h2>TERMINAL QUANT</h2>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+            <h2 style='margin:0; font-size: 1.4rem; color: #f0f6fc;'>TERMINAL QUANT</h2>
             <div class="live-badge"><span class="pulse-dot"></span>AO VIVO</div>
         </div>
     """, unsafe_allow_html=True)
-
-    st.metric("Ibovespa", fmt_br(summary['ibov'], decimals=0), fmt_pct(summary['ibov_pct'], fallback=None))
-    st.markdown("<div class='metric-gap'></div>", unsafe_allow_html=True)
-    st.metric("Dólar Comercial", fmt_br(summary['dolar'], decimals=4, prefix="R$ "), fmt_pct(summary['dolar_pct'], fallback=None))
-
-    st.markdown("<hr/>", unsafe_allow_html=True)
-    st.markdown("<p class='sidebar-eyebrow'>📌 Política Monetária</p>", unsafe_allow_html=True)
-
-    st.metric("SELIC Meta", fmt_pct(selic))
-    st.markdown("<div class='metric-gap'></div>", unsafe_allow_html=True)
-    st.metric("IPCA (Acum. 12m)", fmt_pct(ipca))
-    st.markdown("<div class='metric-gap'></div>", unsafe_allow_html=True)
-    st.metric("Juro Real Estimado", fmt_pct(juro_real))
-
-    st.markdown("<hr/>", unsafe_allow_html=True)
+    
+    st.metric("Ibovespa", f"{summary['ibov']:,.0f}".replace(",", "."), f"{summary['ibov_pct']:.2f}%")
+    st.markdown("<div style='margin-bottom: 12px;'></div>", unsafe_allow_html=True)
+    st.metric("Dólar Comercial", f"R$ {summary['dolar']:.4f}", f"{summary['dolar_pct']:.2f}%")
+    
+    st.markdown("<hr style='border-color: #30363d; margin: 25px 0;'/>", unsafe_allow_html=True)
+    st.subheader("📌 Política Monetária")
+    
+    st.metric("SELIC Meta", f"{selic:.2f}%" if selic != 0.0 else "Indisponível")
+    st.markdown("<div style='margin-bottom: 12px;'></div>", unsafe_allow_html=True)
+    st.metric("IPCA (Acum. 12m)", f"{ipca:.2f}%" if ipca != 0.0 else "Indisponível")
+    st.markdown("<div style='margin-bottom: 12px;'></div>", unsafe_allow_html=True)
+    st.metric("Juro Real Estimado", f"{juro_real:.2f}%" if juro_real != 0.0 else "Indisponível")
+    
+    st.markdown("<hr style='border-color: #30363d; margin: 25px 0;'/>", unsafe_allow_html=True)
     st.caption(f"Atualizado em: {datetime.now().strftime('%H:%M:%S')} BRT")
 
 # ------------------- CORPO PRINCIPAL -------------------
-render_ticker_tape(summary, selic, ipca, juro_real)
-
 st.markdown("""
-    <div class="hero-banner">
-        <span class="hero-tag">⌁ TERMINAL QUANT · DADOS B3 / BCB</span>
-        <h1 class="hero-title">Analytics de Mercado &amp; Dashboard Quantitativo</h1>
-        <p class="hero-subtitle">Análise estrutural de volatilidade, liquidez de ativos e monitoramento macroeconômico brasileiro.</p>
+    <div style="background: linear-gradient(90deg, #161b22 0%, #0d1117 100%); padding: 20px; border-radius: 8px; border: 1px solid #30363d; margin-bottom: 25px;">
+        <h1 style="margin: 0; color: #f0f6fc; font-size: 2rem;">Analytics de Mercado & Dashboard Quantitativo</h1>
+        <p style="margin: 5px 0 0 0; color: #8b949e; font-size: 0.95rem;">Análise estrutural de volatilidade, liquidez de ativos e monitoramento macroeconômico brasileiro.</p>
     </div>
 """, unsafe_allow_html=True)
 
@@ -675,7 +387,7 @@ with tab1:
     col1, col2 = st.columns(2)
     
     with col1:
-        st.markdown("<p class='section-label'>Performance relativa: Ibovespa vs Dólar (base 100)</p>", unsafe_allow_html=True)
+        st.markdown("<p style='color:#8b949e; font-size:0.85rem; font-weight:600;'>PERFORMANCE RELATIVA: IBOVESPA VS DÓLAR (BASE 100)</p>", unsafe_allow_html=True)
         df_hist = get_historical_data(["^BVSP", "USDBRL=X"], period="1y")
         if not df_hist.empty and 'Close_^BVSP' in df_hist.columns:
             df_norm = df_hist.copy().dropna(subset=['Close_^BVSP', 'Close_USDBRL=X'])
@@ -689,7 +401,7 @@ with tab1:
             st.plotly_chart(fig, use_container_width=True)
             
     with col2:
-        st.markdown("<p class='section-label'>Spread histórico: Selic vs inflação (IPCA)</p>", unsafe_allow_html=True)
+        st.markdown("<p style='color:#8b949e; font-size:0.85rem; font-weight:600;'>SPREAD HISTÓRICO: SELIC VS INFLAÇÃO (IPCA)</p>", unsafe_allow_html=True)
         # Para os gráficos, usamos a série 432 para SELIC histórica e a série 433 para IPCA mensal (mostrando a variação mensal)
         df_selic_h = get_historical_macro(432, "SELIC", days=365)
         df_ipca_h = get_historical_macro(433, "IPCA Mensal", days=365)  # Usamos 433 para ter histórico mensal
@@ -703,8 +415,8 @@ with tab1:
         st.plotly_chart(fig2, use_container_width=True)
 
     # GRÁFICO DE COMPARAÇÃO DE AÇÕES
-    st.markdown("<hr class='divider'/>", unsafe_allow_html=True)
-    st.markdown("<p class='section-label'>Análise de correlação paralela: todas as ações da carteira (base histórica 100)</p>", unsafe_allow_html=True)
+    st.markdown("<hr style='border-color: #30363d; margin: 30px 0 20px 0;'/>", unsafe_allow_html=True)
+    st.markdown("<p style='color:#8b949e; font-size:0.85rem; font-weight:600; text-transform: uppercase;'>ANÁLISE DE CORRELAÇÃO PARALELA: TODAS AS AÇÕES DA CARTEIRA (BASE HISTÓRICA 100)</p>", unsafe_allow_html=True)
     
     df_all_stocks = get_historical_data(TICKERS_STOCKS, period="1y")
     if not df_all_stocks.empty:
@@ -739,7 +451,7 @@ with tab1:
 
 # ------------------- TAB 2: ANÁLISE QUANTITATIVA -------------------
 with tab2:
-    st.markdown("<h3 class='section-title'>Análise de Risco e Volatilidade Individual</h3>", unsafe_allow_html=True)
+    st.markdown("<h3 style='color: #f0f6fc; font-size: 1.2rem;'>Análise de Risco e Volatilidade Individual</h3>", unsafe_allow_html=True)
     
     c_sel1, c_sel2 = st.columns([2, 1])
     with c_sel1:
@@ -776,7 +488,7 @@ with tab2:
 
 # ------------------- TAB 3: MONITOR DE MERCADO -------------------
 with tab3:
-    st.markdown("<h3 class='section-title'>Monitor de Liquidez B3</h3>", unsafe_allow_html=True)
+    st.markdown("<h3 style='color: #f0f6fc; font-size: 1.2rem; margin-bottom: 15px;'>Monitor de Liquidez B3</h3>", unsafe_allow_html=True)
     
     config_tabela = {
         "Ativo": st.column_config.TextColumn("Ativo", width="small"),
@@ -797,7 +509,7 @@ with tab3:
 
 # ------------------- TAB 4: DADOS ESTRUTURAIS (DINÂMICO) -------------------
 with tab4:
-    st.markdown("<h3 class='section-title'>Dados Estruturais da Economia</h3>", unsafe_allow_html=True)
+    st.markdown("<h3 style='color: #f0f6fc; font-size: 1.2rem; margin-bottom: 15px;'>Dados Estruturais da Economia</h3>", unsafe_allow_html=True)
     
     # Busca os dados AO VIVO
     gdp_annual = get_annual_gdp()
@@ -818,4 +530,4 @@ with tab4:
     }
     st.table(pd.DataFrame(macro_data))
     
-    st.markdown("<hr class='divider'/><p class='disclaimer'>Aviso: os dados exibidos neste terminal são estritamente para fins informativos e analíticos, não configurando hipótese de recomendação ou assessoria de investimentos.</p>", unsafe_allow_html=True)
+    st.markdown("<hr style='border-color: #30363d;'/><p style='font-size: 0.8rem; color: #8b949e;'>Aviso: Os dados exibidos neste terminal são estritamente para fins informativos e analíticos, não configurando hipótese de recomendação ou assessoria de investimentos.</p>", unsafe_allow_html=True)
