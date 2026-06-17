@@ -5,6 +5,20 @@ import plotly.graph_objects as go
 import yfinance as yf
 import requests
 from datetime import datetime, timedelta
+import locale
+import re
+
+# ------------------- CONFIGURAÇÃO DO LOCALE (para números BR) -------------------
+try:
+    locale.setlocale(locale.LC_ALL, 'pt_BR.UTF-8')  # Linux/Mac
+except:
+    try:
+        locale.setlocale(locale.LC_ALL, 'Portuguese_Brazil.1252')  # Windows
+    except:
+        try:
+            locale.setlocale(locale.LC_ALL, 'pt_BR')  # Fallback
+        except:
+            locale.setlocale(locale.LC_ALL, '')  # Locale padrão do sistema
 
 # ------------------- CONFIGURAÇÃO DA PÁGINA -------------------
 st.set_page_config(
@@ -116,17 +130,39 @@ TICKERS_FIIS = [
     'HGLG11.SA', 'KNRI11.SA', 'VISC11.SA', 'MXRF11.SA', 'XPLG11.SA'
 ]
 
-# ------------------- FUNÇÃO AUXILIAR: CONVERTE NÚMERO BR (VÍRGULA) -------------------
+# ------------------- FUNÇÃO CORRIGIDA: CONVERTE NÚMERO BR/AMERICANO -------------------
 def parse_br_number(valor):
-    """Converte string brasileira (ex: '10,50' ou '1.000,50') para float."""
+    """
+    Converte números nos formatos brasileiro ('14,50') ou americano ('14.50') para float.
+    Também remove pontos de milhar automaticamente.
+    """
     if isinstance(valor, (int, float)):
         return float(valor)
+    
     s = str(valor).strip()
-    # Remove pontos de milhar e troca vírgula decimal por ponto
-    s = s.replace('.', '').replace(',', '.')
+    if not s:
+        return None
+    
+    # Estratégia 1: Usar o locale configurado (resolve vírgula decimal e pontos de milhar)
+    try:
+        return locale.atof(s)
+    except:
+        pass
+    
+    # Estratégia 2: Remover pontos de milhar (ex: 1.000,50 -> 1000,50) e trocar vírgula por ponto
+    try:
+        # Remove pontos que estão separando milhares (ex: 1.000 -> 1000)
+        s_temp = re.sub(r'\.(?=\d{3})', '', s)
+        # Troca a vírgula decimal por ponto
+        s_temp = s_temp.replace(',', '.')
+        return float(s_temp)
+    except:
+        pass
+    
+    # Estratégia 3: Último recurso - tenta converter direto (caso já venha com ponto)
     try:
         return float(s)
-    except ValueError:
+    except:
         return None
 
 # ------------------- FUNÇÕES DE BUSCA OTIMIZADAS -------------------
@@ -141,7 +177,8 @@ def get_macro_bcb(serie):
         if data and len(data) > 0:
             valor_bruto = data[0]['valor']
             return parse_br_number(valor_bruto)
-    except Exception:
+    except Exception as e:
+        print(f"Erro ao buscar série {serie}: {e}")
         return None
 
 @st.cache_data(ttl=86400)  # Atualiza 1x por dia (dados macro mudam devagar)
@@ -160,7 +197,8 @@ def get_annual_gdp():
         df = df.sort_values('data').tail(4)  # últimos 4 trimestres
         total_milhoes = df['valor'].sum()
         return total_milhoes / 1e12  # Converte para trilhões
-    except Exception:
+    except Exception as e:
+        print(f"Erro ao buscar PIB: {e}")
         return None
 
 @st.cache_data(ttl=300)
@@ -332,7 +370,6 @@ with tab1:
             
     with col2:
         st.markdown("<p style='color:#8b949e; font-size:0.85rem; font-weight:600;'>SPREAD HISTÓRICO: SELIC VS INFLAÇÃO (IPCA)</p>", unsafe_allow_html=True)
-        # Usando série 432 para SELIC histórica também
         df_selic_h = get_historical_macro(432, "SELIC", days=365)
         df_ipca_h = get_historical_macro(4447, "IPCA", days=365)
         
@@ -344,7 +381,7 @@ with tab1:
         fig2.update_layout(template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', margin=dict(l=10, r=10, t=10, b=10), height=300, legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
         st.plotly_chart(fig2, use_container_width=True)
 
-    # NOVO GRÁFICO: COMPARAÇÃO PARALELA DE TODAS AS AÇÕES
+    # GRÁFICO DE COMPARAÇÃO DE AÇÕES
     st.markdown("<hr style='border-color: #30363d; margin: 30px 0 20px 0;'/>", unsafe_allow_html=True)
     st.markdown("<p style='color:#8b949e; font-size:0.85rem; font-weight:600; text-transform: uppercase;'>ANÁLISE DE CORRELAÇÃO PARALELA: TODAS AS AÇÕES DA CARTEIRA (BASE HISTÓRICA 100)</p>", unsafe_allow_html=True)
     
@@ -416,7 +453,7 @@ with tab2:
     else:
         st.error("Dados indisponíveis para o ativo ou período selecionado.")
 
-# ------------------- TAB 3: MONITOR DE MERCADO (SCREENERS) -------------------
+# ------------------- TAB 3: MONITOR DE MERCADO -------------------
 with tab3:
     st.markdown("<h3 style='color: #f0f6fc; font-size: 1.2rem; margin-bottom: 15px;'>Monitor de Liquidez B3</h3>", unsafe_allow_html=True)
     
@@ -437,7 +474,7 @@ with tab3:
         df_fiis = get_batch_assets(TICKERS_FIIS)
         st.dataframe(df_fiis, column_config=config_tabela, use_container_width=True, hide_index=True)
 
-# ------------------- TAB 4: DADOS ESTRUTURAIS (AGORA DINÂMICO!) -------------------
+# ------------------- TAB 4: DADOS ESTRUTURAIS (DINÂMICO) -------------------
 with tab4:
     st.markdown("<h3 style='color: #f0f6fc; font-size: 1.2rem; margin-bottom: 15px;'>Dados Estruturais da Economia</h3>", unsafe_allow_html=True)
     
@@ -450,7 +487,7 @@ with tab4:
     # Formatação para exibição
     gdp_str = f"R$ {gdp_annual:.1f} Trilhões" if gdp_annual else "Indisponível"
     unemp_str = f"{unemployment:.1f}%" if unemployment is not None else "Indisponível"
-    trade_str = f"US$ {trade_balance/1000:.1f} Bilhões" if trade_balance else "Indisponível" # Converte milhões para bilhões
+    trade_str = f"US$ {trade_balance/1000:.1f} Bilhões" if trade_balance else "Indisponível"
     debt_str = f"{gross_debt:.1f}%" if gross_debt is not None else "Indisponível"
     
     macro_data = {
