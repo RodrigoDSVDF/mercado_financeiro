@@ -590,11 +590,15 @@ def render_ticker_tape(summary, selic, ipca, juro_real):
             arrow = "▲" if delta >= 0 else "▼"
             cls = "up" if delta >= 0 else "down"
             delta_html = f"<span class='ticker-delta {cls}'>{arrow} {abs(delta):.2f}%</span>"
-        return f"""<div class="ticker-item">
-            <span class="ticker-label">{label}</span>
-            <span class="ticker-value{value_class_attr}">{value_html}</span>
-            {delta_html}
-        </div>"""
+        # Tudo em uma única linha (sem quebras de linha) de propósito: o st.markdown passa
+        # o HTML pelo parser de Markdown antes de renderizar, e uma linha em branco no meio
+        # de um bloco HTML faz o parser tratar o restante como texto puro em vez de HTML.
+        return (
+            f'<div class="ticker-item">'
+            f'<span class="ticker-label">{label}</span>'
+            f'<span class="ticker-value{value_class_attr}">{value_html}</span>'
+            f'{delta_html}</div>'
+        )
 
     juro_cls = "" if is_missing(juro_real) else ("up" if juro_real >= 0 else "down")
 
