@@ -181,6 +181,35 @@ def get_macro_bcb(serie):
         print(f"Erro ao buscar série {serie}: {e}")
         return None
 
+@st.cache_data(ttl=3600)
+def get_ipca_acumulado_12m():
+    """
+    Calcula o IPCA acumulado em 12 meses a partir dos dados mensais (série 433).
+    Isso garante que o dado seja correto, mesmo se a série 4447 estiver atrasada.
+    """
+    try:
+        url = "https://api.bcb.gov.br/dados/serie/bcdata.sgs.433/dados?formato=json"
+        response = requests.get(url, timeout=5)
+        response.raise_for_status()
+        data = response.json()
+        if not data:
+            return None
+        df = pd.DataFrame(data)
+        df['data'] = pd.to_datetime(df['data'], dayfirst=True)
+        df['valor'] = df['valor'].apply(parse_br_number)
+        df = df.sort_values('data').tail(13)  # Pega os últimos 13 meses (precisa de 12 variações)
+        if len(df) < 13:
+            return None  # Não tem dados suficientes
+        # Calcula o acumulado: (1 + r1)*(1 + r2)*... - 1
+        acumulado = 1.0
+        for _, row in df.iterrows():
+            taxa = row['valor'] / 100  # converte percentual para decimal
+            acumulado *= (1 + taxa)
+        return (acumulado - 1) * 100  # retorna em percentual
+    except Exception as e:
+        print(f"Erro ao calcular IPCA acumulado: {e}")
+        return None
+
 @st.cache_data(ttl=86400)  # Atualiza 1x por dia (dados macro mudam devagar)
 def get_annual_gdp():
     """Busca os 4 últimos trimestres do PIB e soma para obter o PIB Anual Corrente."""
@@ -299,8 +328,10 @@ def calculate_quant_metrics(ticker, period="1y"):
 # ------------------- CARREGAMENTO DE DADOS -------------------
 summary = get_market_summary()
 selic = get_macro_bcb(432)          # Taxa SELIC diária (anualizada)
-cdi = get_macro_bcb(12)             # Taxa CDI diária (anualizada)
-ipca = get_macro_bcb(4447)          # IPCA acumulado 12 meses
+cdi = get_macro_bcb(12)             # Taxa CDI diária (anualizada) - não usado, mas mantido
+
+# --- IPCA agora é calculado a partir dos dados mensais ---
+ipca = get_ipca_acumulado_12m()
 
 # Se algum dado não veio, coloca um valor padrão "N/A" visualmente
 if selic is None:
@@ -308,6 +339,7 @@ if selic is None:
 if ipca is None:
     ipca = 0.0
 
+# Cálculo do juro real
 juro_real = (((1 + (selic/100)) / (1 + (ipca/100))) - 1) * 100 if (selic and ipca) else 0.0
 
 # ------------------- BARRA LATERAL (SIDEBAR) -------------------
@@ -370,14 +402,15 @@ with tab1:
             
     with col2:
         st.markdown("<p style='color:#8b949e; font-size:0.85rem; font-weight:600;'>SPREAD HISTÓRICO: SELIC VS INFLAÇÃO (IPCA)</p>", unsafe_allow_html=True)
+        # Para os gráficos, usamos a série 432 para SELIC histórica e a série 433 para IPCA mensal (mostrando a variação mensal)
         df_selic_h = get_historical_macro(432, "SELIC", days=365)
-        df_ipca_h = get_historical_macro(4447, "IPCA", days=365)
+        df_ipca_h = get_historical_macro(433, "IPCA Mensal", days=365)  # Usamos 433 para ter histórico mensal
         
         fig2 = go.Figure()
         if not df_selic_h.empty:
             fig2.add_trace(go.Scatter(x=df_selic_h['Date'], y=df_selic_h['SELIC'], name='SELIC (%)', line=dict(color='#3fb950')))
         if not df_ipca_h.empty:
-            fig2.add_trace(go.Scatter(x=df_ipca_h['Date'], y=df_ipca_h['IPCA'], name='IPCA 12M (%)', line=dict(color='#d15704')))
+            fig2.add_trace(go.Scatter(x=df_ipca_h['Date'], y=df_ipca_h['IPCA Mensal'], name='IPCA Mensal (%)', line=dict(color='#d15704')))
         fig2.update_layout(template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', margin=dict(l=10, r=10, t=10, b=10), height=300, legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
         st.plotly_chart(fig2, use_container_width=True)
 
