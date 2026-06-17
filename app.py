@@ -10,15 +10,15 @@ import re
 
 # ------------------- CONFIGURAÇÃO DO LOCALE (para números BR) -------------------
 try:
-    locale.setlocale(locale.LC_ALL, 'pt_BR.UTF-8')  # Linux/Mac
+    locale.setlocale(locale.LC_ALL, 'pt_BR.UTF-8')
 except:
     try:
-        locale.setlocale(locale.LC_ALL, 'Portuguese_Brazil.1252')  # Windows
+        locale.setlocale(locale.LC_ALL, 'Portuguese_Brazil.1252')
     except:
         try:
-            locale.setlocale(locale.LC_ALL, 'pt_BR')  # Fallback
+            locale.setlocale(locale.LC_ALL, 'pt_BR')
         except:
-            locale.setlocale(locale.LC_ALL, '')  # Locale padrão do sistema
+            locale.setlocale(locale.LC_ALL, '')
 
 # ------------------- CONFIGURAÇÃO DA PÁGINA -------------------
 st.set_page_config(
@@ -58,8 +58,6 @@ custom_css = """
         background-color: var(--bg-primary);
     }
 
-    /* Textura de grão sutil — só um leve "ruído" de papel para tirar a frieza do dark mode liso.
-       pointer-events:none garante que ela nunca intercepta cliques. */
     [data-testid="stAppViewContainer"] { position: relative; }
     [data-testid="stAppViewContainer"]::before {
         content: "";
@@ -79,7 +77,7 @@ custom_css = """
         color: var(--text-primary);
     }
 
-    /* ---------- Fita de cotações (signature element) ---------- */
+    /* ---------- Fita de cotações ---------- */
     .ticker-tape {
         position: relative;
         width: 100%;
@@ -248,6 +246,18 @@ custom_css = """
         color: var(--text-primary) !important;
     }
 
+    /* ---------- Correção: labels de metric na sidebar não cortam ---------- */
+    section[data-testid="stSidebar"] div[data-testid="stMetricLabel"] > div {
+        white-space: normal !important;
+        word-break: break-word !important;
+        overflow: visible !important;
+        text-overflow: unset !important;
+        line-height: 1.35 !important;
+    }
+    section[data-testid="stSidebar"] div[data-testid="stMetricValue"] > div {
+        font-size: 1.4rem !important;
+    }
+
     /* ---------- Abas ---------- */
     button[data-baseweb="tab"] {
         font-family: 'Inter', sans-serif;
@@ -340,43 +350,29 @@ TICKERS_FIIS = [
     'HGLG11.SA', 'KNRI11.SA', 'VISC11.SA', 'MXRF11.SA', 'XPLG11.SA'
 ]
 
-# ------------------- FUNÇÃO CORRIGIDA: CONVERTE NÚMERO BR/AMERICANO -------------------
+# ------------------- FUNÇÕES UTILITÁRIAS -------------------
 def parse_br_number(valor):
-    """
-    Converte números nos formatos brasileiro ('14,50') ou americano ('14.50') para float.
-    Também remove pontos de milhar automaticamente.
-    """
     if isinstance(valor, (int, float)):
         return float(valor)
-    
     s = str(valor).strip()
     if not s:
         return None
-    
-    # Estratégia 1: Usar o locale configurado (resolve vírgula decimal e pontos de milhar)
     try:
         return locale.atof(s)
     except:
         pass
-    
-    # Estratégia 2: Remover pontos de milhar (ex: 1.000,50 -> 1000,50) e trocar vírgula por ponto
     try:
-        # Remove pontos que estão separando milhares (ex: 1.000 -> 1000)
         s_temp = re.sub(r'\.(?=\d{3})', '', s)
-        # Troca a vírgula decimal por ponto
         s_temp = s_temp.replace(',', '.')
         return float(s_temp)
     except:
         pass
-    
-    # Estratégia 3: Último recurso - tenta converter direto (caso já venha com ponto)
     try:
         return float(s)
     except:
         return None
 
 def is_missing(value):
-    """Verifica se um valor é None ou NaN (cobre os dois jeitos de 'dado ausente')."""
     if value is None:
         return True
     try:
@@ -385,7 +381,6 @@ def is_missing(value):
         return False
 
 def fmt_br(value, decimals=0, prefix="", suffix="", fallback="Indisponível"):
-    """Formata número no padrão BR (ponto como separador de milhar). Retorna fallback se ausente."""
     if is_missing(value):
         return fallback
     texto = f"{value:,.{decimals}f}"
@@ -396,33 +391,26 @@ def fmt_br(value, decimals=0, prefix="", suffix="", fallback="Indisponível"):
     return f"{prefix}{texto}{suffix}"
 
 def fmt_pct(value, decimals=2, fallback="Indisponível"):
-    """Formata percentual com sinal, ou retorna fallback se o dado estiver ausente."""
     if is_missing(value):
         return fallback
     return f"{value:.{decimals}f}%"
 
-# ------------------- FUNÇÕES DE BUSCA OTIMIZADAS -------------------
+# ------------------- FUNÇÕES DE BUSCA -------------------
 @st.cache_data(ttl=300)
 def get_macro_bcb(serie):
-    """Busca o último valor de uma série do BCB."""
     try:
         url = f"https://api.bcb.gov.br/dados/serie/bcdata.sgs.{serie}/dados/ultimos/1?formato=json"
         response = requests.get(url, timeout=5)
         response.raise_for_status()
         data = response.json()
         if data and len(data) > 0:
-            valor_bruto = data[0]['valor']
-            return parse_br_number(valor_bruto)
+            return parse_br_number(data[0]['valor'])
     except Exception as e:
         print(f"Erro ao buscar série {serie}: {e}")
         return None
 
 @st.cache_data(ttl=3600)
 def get_ipca_acumulado_12m():
-    """
-    Calcula o IPCA acumulado em 12 meses a partir dos dados mensais (série 433).
-    Isso garante que o dado seja correto, mesmo se a série 4447 estiver atrasada.
-    """
     try:
         url = "https://api.bcb.gov.br/dados/serie/bcdata.sgs.433/dados?formato=json"
         response = requests.get(url, timeout=5)
@@ -433,22 +421,19 @@ def get_ipca_acumulado_12m():
         df = pd.DataFrame(data)
         df['data'] = pd.to_datetime(df['data'], dayfirst=True)
         df['valor'] = df['valor'].apply(parse_br_number)
-        df = df.sort_values('data').tail(13)  # Pega os últimos 13 meses (precisa de 12 variações)
+        df = df.sort_values('data').tail(13)
         if len(df) < 13:
-            return None  # Não tem dados suficientes
-        # Calcula o acumulado: (1 + r1)*(1 + r2)*... - 1
+            return None
         acumulado = 1.0
         for _, row in df.iterrows():
-            taxa = row['valor'] / 100  # converte percentual para decimal
-            acumulado *= (1 + taxa)
-        return (acumulado - 1) * 100  # retorna em percentual
+            acumulado *= (1 + row['valor'] / 100)
+        return (acumulado - 1) * 100
     except Exception as e:
         print(f"Erro ao calcular IPCA acumulado: {e}")
         return None
 
-@st.cache_data(ttl=86400)  # Atualiza 1x por dia (dados macro mudam devagar)
+@st.cache_data(ttl=86400)
 def get_annual_gdp():
-    """Busca os 4 últimos trimestres do PIB e soma para obter o PIB Anual Corrente."""
     try:
         url = "https://api.bcb.gov.br/dados/serie/bcdata.sgs.22099/dados?formato=json"
         response = requests.get(url, timeout=10)
@@ -459,23 +444,15 @@ def get_annual_gdp():
         df = pd.DataFrame(data)
         df['data'] = pd.to_datetime(df['data'], dayfirst=True)
         df['valor'] = df['valor'].apply(parse_br_number)
-        df = df.sort_values('data').tail(4)  # últimos 4 trimestres
-        total_milhoes = df['valor'].sum()
-        return total_milhoes / 1e12  # Converte para trilhões
+        df = df.sort_values('data').tail(4)
+        return df['valor'].sum() / 1e12
     except Exception as e:
         print(f"Erro ao buscar PIB: {e}")
         return None
 
 @st.cache_data(ttl=300)
 def get_market_summary():
-    """
-    Busca Ibovespa e Dólar. IMPORTANTE: o BVSP (B3) e o USDBRL=X (forex) não fecham
-    no mesmo horário, então a última linha do DataFrame combinado pode ter NaN para
-    um dos dois enquanto o outro já tem valor. Por isso cada série é tratada com
-    dropna() de forma independente, em vez de usar iloc[-1] direto na linha combinada.
-    """
     try:
-        # period maior dá margem de segurança em feriados/finais de semana
         df = yf.download(["^BVSP", "USDBRL=X"], period="5d", progress=False)
         if isinstance(df.columns, pd.MultiIndex):
             df.columns = ['_'.join(col).strip() for col in df.columns]
@@ -484,19 +461,15 @@ def get_market_summary():
         dolar_serie = df['Close_USDBRL=X'].dropna()
 
         if len(ibov_serie) < 2 or len(dolar_serie) < 2:
-            raise ValueError("Histórico insuficiente após remover valores nulos.")
+            raise ValueError("Histórico insuficiente.")
 
         ibov_hoje = ibov_serie.iloc[-1]
-        ibov_ontem = ibov_serie.iloc[-2]
-        ibov_pct = ((ibov_hoje / ibov_ontem) - 1) * 100
-
+        ibov_pct = ((ibov_hoje / ibov_serie.iloc[-2]) - 1) * 100
         dolar_hoje = dolar_serie.iloc[-1]
-        dolar_ontem = dolar_serie.iloc[-2]
-        dolar_pct = ((dolar_hoje / dolar_ontem) - 1) * 100
+        dolar_pct = ((dolar_hoje / dolar_serie.iloc[-2]) - 1) * 100
         return {'ibov': ibov_hoje, 'ibov_pct': ibov_pct, 'dolar': dolar_hoje, 'dolar_pct': dolar_pct}
     except Exception as e:
         print(f"Erro ao buscar resumo de mercado: {e}")
-        # None (em vez de número fixo) para a UI exibir "Indisponível" de forma honesta
         return {'ibov': None, 'ibov_pct': None, 'dolar': None, 'dolar_pct': None}
 
 @st.cache_data(ttl=300)
@@ -505,7 +478,6 @@ def get_batch_assets(tickers):
         df = yf.download(tickers, period="5d", progress=False)
         if isinstance(df.columns, pd.MultiIndex):
             df.columns = ['_'.join(col).strip() for col in df.columns]
-            
         data = []
         for ticker in tickers:
             col_close = f"Close_{ticker}"
@@ -560,28 +532,22 @@ def calculate_quant_metrics(ticker, period="1y"):
     try:
         objeto_ticker = yf.Ticker(ticker)
         df = objeto_ticker.history(period=period)
-        if df.empty: 
+        if df.empty:
             return None
-            
         df = df.reset_index()
         df['Date'] = pd.to_datetime(df['Date']).dt.date
         df['Returns'] = df['Close'].pct_change()
         df['Vol_21d'] = df['Returns'].rolling(21).std() * np.sqrt(252) * 100
         df['MMA_50'] = df['Close'].rolling(50).mean()
         df['MMA_200'] = df['Close'].rolling(200).mean()
-        
         rolling_max = df['Close'].cummax()
         df['Drawdown'] = (df['Close'] - rolling_max) / rolling_max * 100
         return df
     except Exception:
         return None
 
-# ------------------- FUNÇÕES DE RENDERIZAÇÃO (UI) -------------------
+# ------------------- RENDERIZAÇÃO -------------------
 def render_ticker_tape(summary, selic, ipca, juro_real):
-    """
-    Fita de cotações estilo terminal financeiro, rolando continuamente no topo da página.
-    A sequência de itens é duplicada para o loop de CSS ficar perfeito, sem 'salto' visível.
-    """
     def item(label, value_html, delta=None, value_class=""):
         value_class_attr = f" {value_class}" if value_class else ""
         if delta is None or is_missing(delta):
@@ -590,9 +556,6 @@ def render_ticker_tape(summary, selic, ipca, juro_real):
             arrow = "▲" if delta >= 0 else "▼"
             cls = "up" if delta >= 0 else "down"
             delta_html = f"<span class='ticker-delta {cls}'>{arrow} {abs(delta):.2f}%</span>"
-        # Tudo em uma única linha (sem quebras de linha) de propósito: o st.markdown passa
-        # o HTML pelo parser de Markdown antes de renderizar, e uma linha em branco no meio
-        # de um bloco HTML faz o parser tratar o restante como texto puro em vez de HTML.
         return (
             f'<div class="ticker-item">'
             f'<span class="ticker-label">{label}</span>'
@@ -609,7 +572,7 @@ def render_ticker_tape(summary, selic, ipca, juro_real):
         item("IPCA 12M", fmt_pct(ipca)),
         item("JURO REAL", fmt_pct(juro_real), value_class=juro_cls),
     ]
-    track_html = "".join(items) * 2  # duplicado para o scroll contínuo (efeito "fita infinita")
+    track_html = "".join(items) * 2
 
     st.markdown(
         f'<div class="ticker-tape"><div class="ticker-track">{track_html}</div></div>',
@@ -618,20 +581,16 @@ def render_ticker_tape(summary, selic, ipca, juro_real):
 
 # ------------------- CARREGAMENTO DE DADOS -------------------
 summary = get_market_summary()
-selic = get_macro_bcb(432)          # Taxa SELIC diária (anualizada)
-cdi = get_macro_bcb(12)             # Taxa CDI diária (anualizada) - não usado, mas mantido
-
-# --- IPCA agora é calculado a partir dos dados mensais ---
+selic = get_macro_bcb(432)
+cdi = get_macro_bcb(12)
 ipca = get_ipca_acumulado_12m()
 
-# Cálculo do juro real (Fisher) - só roda se os dois insumos vieram com sucesso.
-# Antes, None era trocado por 0.0 aqui, o que misturava "dado ausente" com "taxa zero" de verdade.
 if not is_missing(selic) and not is_missing(ipca):
     juro_real = (((1 + (selic / 100)) / (1 + (ipca / 100))) - 1) * 100
 else:
     juro_real = None
 
-# ------------------- BARRA LATERAL (SIDEBAR) -------------------
+# ------------------- SIDEBAR -------------------
 with st.sidebar:
     st.markdown("""
         <div class="sidebar-brand">
@@ -649,9 +608,9 @@ with st.sidebar:
 
     st.metric("SELIC Meta", fmt_pct(selic))
     st.markdown("<div class='metric-gap'></div>", unsafe_allow_html=True)
-    st.metric("IPCA (Acum. 12m)", fmt_pct(ipca))
+    st.metric("IPCA (12 meses)", fmt_pct(ipca))
     st.markdown("<div class='metric-gap'></div>", unsafe_allow_html=True)
-    st.metric("Juro Real Estimado", fmt_pct(juro_real))
+    st.metric("Juro Real", fmt_pct(juro_real))
 
     st.markdown("<hr/>", unsafe_allow_html=True)
     st.caption(f"Atualizado em: {datetime.now().strftime('%H:%M:%S')} BRT")
@@ -668,16 +627,16 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 tab1, tab2, tab3, tab4 = st.tabs([
-    "📊 Visão Global & Macro", 
-    "🎯 Análise Quantitativa", 
-    "📋 Monitor de Mercado", 
+    "📊 Visão Global & Macro",
+    "🎯 Análise Quantitativa",
+    "📋 Monitor de Mercado",
     "⚙️ Dados Estruturais"
 ])
 
-# ------------------- TAB 1: VISÃO GLOBAL & MACRO -------------------
+# ------------------- TAB 1 -------------------
 with tab1:
     col1, col2 = st.columns(2)
-    
+
     with col1:
         st.markdown("<p class='section-label'>Performance relativa: Ibovespa vs Dólar (base 100)</p>", unsafe_allow_html=True)
         df_hist = get_historical_data(["^BVSP", "USDBRL=X"], period="1y")
@@ -685,19 +644,16 @@ with tab1:
             df_norm = df_hist.copy().dropna(subset=['Close_^BVSP', 'Close_USDBRL=X'])
             df_norm['Ibovespa'] = (df_norm['Close_^BVSP'] / df_norm['Close_^BVSP'].iloc[0]) * 100
             df_norm['Dólar'] = (df_norm['Close_USDBRL=X'] / df_norm['Close_USDBRL=X'].iloc[0]) * 100
-            
             fig = go.Figure()
             fig.add_trace(go.Scatter(x=df_norm['Date'], y=df_norm['Ibovespa'], name='Ibovespa', line=dict(color='#58a6ff', width=2)))
             fig.add_trace(go.Scatter(x=df_norm['Date'], y=df_norm['Dólar'], name='Dólar', line=dict(color='#f9826c', width=2)))
             fig.update_layout(template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', margin=dict(l=10, r=10, t=10, b=10), height=300, legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
             st.plotly_chart(fig, use_container_width=True)
-            
+
     with col2:
         st.markdown("<p class='section-label'>Spread histórico: Selic vs inflação (IPCA)</p>", unsafe_allow_html=True)
-        # Para os gráficos, usamos a série 432 para SELIC histórica e a série 433 para IPCA mensal (mostrando a variação mensal)
         df_selic_h = get_historical_macro(432, "SELIC", days=365)
-        df_ipca_h = get_historical_macro(433, "IPCA Mensal", days=365)  # Usamos 433 para ter histórico mensal
-        
+        df_ipca_h = get_historical_macro(433, "IPCA Mensal", days=365)
         fig2 = go.Figure()
         if not df_selic_h.empty:
             fig2.add_trace(go.Scatter(x=df_selic_h['Date'], y=df_selic_h['SELIC'], name='SELIC (%)', line=dict(color='#3fb950')))
@@ -706,10 +662,9 @@ with tab1:
         fig2.update_layout(template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', margin=dict(l=10, r=10, t=10, b=10), height=300, legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
         st.plotly_chart(fig2, use_container_width=True)
 
-    # GRÁFICO DE COMPARAÇÃO DE AÇÕES
     st.markdown("<hr class='divider'/>", unsafe_allow_html=True)
     st.markdown("<p class='section-label'>Análise de correlação paralela: todas as ações da carteira (base histórica 100)</p>", unsafe_allow_html=True)
-    
+
     df_all_stocks = get_historical_data(TICKERS_STOCKS, period="1y")
     if not df_all_stocks.empty:
         fig_comp = go.Figure()
@@ -721,8 +676,8 @@ with tab1:
                     base_val = series_clean.iloc[0]
                     norm_series = (df_all_stocks[col_name] / base_val) * 100
                     fig_comp.add_trace(go.Scatter(
-                        x=df_all_stocks['Date'], 
-                        y=norm_series, 
+                        x=df_all_stocks['Date'],
+                        y=norm_series,
                         name=ticker.replace('.SA', ''),
                         mode='lines',
                         line=dict(width=1.5),
@@ -730,10 +685,10 @@ with tab1:
                         hovertext=ticker.replace('.SA', '')
                     ))
         fig_comp.update_layout(
-            template="plotly_dark", 
-            paper_bgcolor='rgba(0,0,0,0)', 
+            template="plotly_dark",
+            paper_bgcolor='rgba(0,0,0,0)',
             plot_bgcolor='rgba(0,0,0,0)',
-            margin=dict(l=10, r=10, t=15, b=10), 
+            margin=dict(l=10, r=10, t=15, b=10),
             height=450,
             xaxis=dict(title="Período"),
             yaxis=dict(title="Retorno Acumulado (%)"),
@@ -741,36 +696,35 @@ with tab1:
         )
         st.plotly_chart(fig_comp, use_container_width=True)
 
-# ------------------- TAB 2: ANÁLISE QUANTITATIVA -------------------
+# ------------------- TAB 2 -------------------
 with tab2:
     st.markdown("<h3 class='section-title'>Análise de Risco e Volatilidade Individual</h3>", unsafe_allow_html=True)
-    
+
     c_sel1, c_sel2 = st.columns([2, 1])
     with c_sel1:
         asset_selected = st.selectbox("Selecione um ativo da B3:", TICKERS_STOCKS, index=0)
     with c_sel2:
         time_window = st.selectbox("Janela Temporal:", ["3m", "6m", "1y", "2y"], index=2)
-    
+
     quant_df = calculate_quant_metrics(asset_selected, period=time_window)
-    
+
     if quant_df is not None and not quant_df.empty:
         q_col1, q_col2, q_col3 = st.columns(3)
         current_vol = quant_df['Vol_21d'].iloc[-1]
         max_dd = quant_df['Drawdown'].min()
         current_close = quant_df['Close'].iloc[-1]
-        
+
         q_col1.metric("Volatilidade Histórica (21d Anualizada)", f"{current_vol:.2f}%")
         q_col2.metric("Drawdown Máximo do Período", f"{max_dd:.2f}%")
         q_col3.metric("Último Fechamento", f"R$ {current_close:.2f}")
-        
-        # Gráficos Quantitativos
+
         fig_price = go.Figure()
         fig_price.add_trace(go.Scatter(x=quant_df['Date'], y=quant_df['Close'], name='Preço', line=dict(color='#f0f6fc')))
-        fig_price.add_trace(go.Scatter(x=quant_df['Date'], y=quant_df['MMA_50'], name='Média Móvel 50 dias', line=dict(color='#f9826c', dash='dash')))
-        fig_price.add_trace(go.Scatter(x=quant_df['Date'], y=quant_df['MMA_200'], name='Média Móvel 200 dias', line=dict(color='#58a6ff', dash='dot')))
+        fig_price.add_trace(go.Scatter(x=quant_df['Date'], y=quant_df['MMA_50'], name='Média Móvel 50d', line=dict(color='#f9826c', dash='dash')))
+        fig_price.add_trace(go.Scatter(x=quant_df['Date'], y=quant_df['MMA_200'], name='Média Móvel 200d', line=dict(color='#58a6ff', dash='dot')))
         fig_price.update_layout(title="Tendências de Preço & Médias Móveis", template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', height=300)
         st.plotly_chart(fig_price, use_container_width=True)
-        
+
         fig_vol = go.Figure()
         fig_vol.add_trace(go.Scatter(x=quant_df['Date'], y=quant_df['Vol_21d'], name='Volatilidade', fill='tozeroy', line=dict(color='#dbab09')))
         fig_vol.update_layout(title="Volatilidade Móvel Histórica (%)", template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', height=220)
@@ -778,48 +732,46 @@ with tab2:
     else:
         st.error("Dados indisponíveis para o ativo ou período selecionado.")
 
-# ------------------- TAB 3: MONITOR DE MERCADO -------------------
+# ------------------- TAB 3 -------------------
 with tab3:
     st.markdown("<h3 class='section-title'>Monitor de Liquidez B3</h3>", unsafe_allow_html=True)
-    
+
     config_tabela = {
         "Ativo": st.column_config.TextColumn("Ativo", width="small"),
         "Preço": st.column_config.NumberColumn("Último Preço", format="R$ %.2f"),
         "Variação (%)": st.column_config.NumberColumn("Retorno Diário", format="%.2f%%"),
         "Volume Diário": st.column_config.NumberColumn("Volume Financeiro", format="%d")
     }
-    
+
     sub_tab1, sub_tab2 = st.tabs(["⚡ Ações (Alta Liquidez)", "🏢 Fundos Imobiliários (FIIs)"])
-    
+
     with sub_tab1:
         df_stocks = get_batch_assets(TICKERS_STOCKS)
         st.dataframe(df_stocks, column_config=config_tabela, use_container_width=True, hide_index=True)
-        
+
     with sub_tab2:
         df_fiis = get_batch_assets(TICKERS_FIIS)
         st.dataframe(df_fiis, column_config=config_tabela, use_container_width=True, hide_index=True)
 
-# ------------------- TAB 4: DADOS ESTRUTURAIS (DINÂMICO) -------------------
+# ------------------- TAB 4 -------------------
 with tab4:
     st.markdown("<h3 class='section-title'>Dados Estruturais da Economia</h3>", unsafe_allow_html=True)
-    
-    # Busca os dados AO VIVO
+
     gdp_annual = get_annual_gdp()
-    unemployment = get_macro_bcb(24369)   # Taxa de desemprego PNAD
-    trade_balance = get_macro_bcb(26073)  # Balança comercial (acum. ano) em US$ milhões
-    gross_debt = get_macro_bcb(13790)     # Dívida bruta / PIB
-    
-    # Formatação para exibição
+    unemployment = get_macro_bcb(24369)
+    trade_balance = get_macro_bcb(26073)
+    gross_debt = get_macro_bcb(13790)
+
     gdp_str = f"R$ {gdp_annual:.1f} Trilhões" if gdp_annual else "Indisponível"
     unemp_str = f"{unemployment:.1f}%" if unemployment is not None else "Indisponível"
     trade_str = f"US$ {trade_balance/1000:.1f} Bilhões" if trade_balance else "Indisponível"
     debt_str = f"{gross_debt:.1f}%" if gross_debt is not None else "Indisponível"
-    
+
     macro_data = {
         'Indicador Econômico': ['PIB Corrente Real', 'Taxa de Desemprego (PNAD)', 'Balança Comercial (Acum. Ano)', 'Dívida Bruta / PIB'],
         'Valor Atual': [gdp_str, unemp_str, trade_str, debt_str],
         'Fonte dos Dados': ['IBGE / BCB (SGS 22099)', 'IBGE / BCB (SGS 24369)', 'MDIC / BCB (SGS 26073)', 'Banco Central (SGS 13790)']
     }
     st.table(pd.DataFrame(macro_data))
-    
+
     st.markdown("<hr class='divider'/><p class='disclaimer'>Aviso: os dados exibidos neste terminal são estritamente para fins informativos e analíticos, não configurando hipótese de recomendação ou assessoria de investimentos.</p>", unsafe_allow_html=True)
