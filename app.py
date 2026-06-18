@@ -528,42 +528,6 @@ def get_historical_macro(serie, name, days=365):
     except Exception:
         return pd.DataFrame(columns=['Date', name])
 
-# ---------- NOVA FUNÇÃO: IPCA ACUMULADO HISTÓRICO (janela móvel 12m) ----------
-@st.cache_data(ttl=3600)
-def get_historical_ipca_acumulado(days=365):
-    """
-    Retorna o IPCA acumulado em 12 meses para cada data disponível
-    (usando a série 433 e calculando janela móvel de 12 meses).
-    """
-    try:
-        url = "https://api.bcb.gov.br/dados/serie/bcdata.sgs.433/dados?formato=json"
-        response = requests.get(url, timeout=5)
-        response.raise_for_status()
-        data = response.json()
-        if not data:
-            return pd.DataFrame(columns=['Date', 'IPCA_Acumulado'])
-
-        df = pd.DataFrame(data)
-        df['data'] = pd.to_datetime(df['data'], dayfirst=True)
-        df['valor'] = df['valor'].apply(parse_br_number)
-        df = df.sort_values('data')
-
-        # Calcula o acumulado de 12 meses para cada mês
-        df['IPCA_Acumulado'] = df['valor'].rolling(12).apply(
-            lambda x: ( (1 + x/100).prod() - 1 ) * 100 if len(x) == 12 else None,
-            raw=False
-        )
-        df = df.dropna(subset=['IPCA_Acumulado'])
-
-        # Filtra pelo período solicitado
-        start_date = datetime.now() - timedelta(days=days)
-        df = df[df['data'] >= start_date]
-        df['Date'] = df['data'].dt.date
-        return df[['Date', 'IPCA_Acumulado']]
-    except Exception as e:
-        print(f"Erro ao calcular IPCA acumulado histórico: {e}")
-        return pd.DataFrame(columns=['Date', 'IPCA_Acumulado'])
-
 def calculate_quant_metrics(ticker, period="1y"):
     try:
         objeto_ticker = yf.Ticker(ticker)
@@ -689,9 +653,9 @@ with tab1:
     with col2:
         st.markdown("<p class='section-label'>Spread histórico: Selic vs IPCA Acumulado (12 meses)</p>", unsafe_allow_html=True)
 
-        # Busca dados usando as funções corretas
+        # Usa a série 10844 diretamente – dados mensais do IPCA acumulado
         df_selic_h = get_historical_macro(432, "SELIC", days=365)
-        df_ipca_h  = get_historical_ipca_acumulado(days=365)   # NOVA FUNÇÃO
+        df_ipca_h  = get_historical_macro(10844, "IPCA Acumulado", days=365)
 
         fig2 = go.Figure()
 
@@ -706,21 +670,18 @@ with tab1:
         if not df_ipca_h.empty:
             fig2.add_trace(go.Scatter(
                 x=df_ipca_h['Date'],
-                y=df_ipca_h['IPCA_Acumulado'],
+                y=df_ipca_h['IPCA Acumulado'],
                 name='IPCA Acum. 12m (%)',
                 line=dict(color='#d15704', width=2)
             ))
 
-        # Linha horizontal em 0 (referência)
+        # Linha horizontal em 0
         fig2.add_hline(y=0, line_dash="dash", line_color="gray", opacity=0.5)
 
-        # --- ANOTAÇÃO COM O JURO REAL CALCULADO A PARTIR DOS ÚLTIMOS PONTOS ---
-        if not df_selic_h.empty and not df_ipca_h.empty:
-            ultima_selic = df_selic_h['SELIC'].iloc[-1]
-            ultimo_ipca  = df_ipca_h['IPCA_Acumulado'].iloc[-1]
-            juro_grafico = (((1 + ultima_selic/100) / (1 + ultimo_ipca/100)) - 1) * 100
+        # Anotação com o Juro Real atual (calculado globalmente)
+        if not is_missing(juro_real):
             data_atual = datetime.now().strftime("%d/%m/%Y")
-            anotacao = f"Juro Real atual: {juro_grafico:.2f}% ({data_atual})"
+            anotacao = f"Juro Real atual: {juro_real:.2f}% ({data_atual})"
         else:
             anotacao = "Dados insuficientes"
 
